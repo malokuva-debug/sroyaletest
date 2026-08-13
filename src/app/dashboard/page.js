@@ -4119,7 +4119,14 @@ function RecurringExpensesCard({ items, onSave, onDelete, onSync, t, confirmAsyn
       const created = res?.recurringCreated ?? 0;
       const payrollCreated = res?.payrollCreated ?? 0;
       if (created === 0 && payrollCreated === 0) {
-        toast.info(t('sinkronizim_0'));
+        const info = [];
+        (res?.nextRecurring || []).forEach(x =>
+          info.push(`${x.name}: ${x.nextDueDate}`)
+        );
+        (res?.nextPayrolls || []).forEach(x =>
+          info.push(`${x.workerName}: ${x.nextPayrollDate}`)
+        );
+        toast.info(t('sinkronizim_0') + (info.length ? ' — ' + info.join(' · ') : ''));
       } else {
         toast.success(
           t('sinkronizimi_u_perfundua')

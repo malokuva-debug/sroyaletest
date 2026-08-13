@@ -1243,11 +1243,18 @@ export async function applyRecurringExpenses() {
   const { data: rows } = await supabase.from('recurring_expenses').select('*');
   const expenses = toCamelArray(rows ?? []);
   let created = 0;
+  const next = [];
 
   for (const e of expenses) {
     if (e.active === false) continue;
 
-    let nextDue = e.nextDueDate || computeFirstDue(e, todayIso);
+    let nextDue = e.nextDueDate;
+    if (!nextDue || !e.lastGeneratedAt) {
+      // Un-anchored schedule (never generated a row): recompute so a first run
+      // catches up when the configured day already passed. This also repairs
+      // dates that pre-catch-up logic had seeded one period into the future.
+      nextDue = computeFirstDue(e, todayIso);
+    }
     if (e.startDate && nextDue < e.startDate) nextDue = e.startDate;
     if (e.endDate && nextDue > e.endDate) continue;
 
@@ -1271,13 +1278,16 @@ export async function applyRecurringExpenses() {
         next_due_date: nextDue,
         last_generated_at: todayIso,
       }).eq('id', e.id);
-    } else if (!e.nextDueDate) {
-      // First run: persist the computed first due date even if it's in the future.
-      await supabase.from('recurring_expenses').update({ next_due_date: nextDue }).eq('id', e.id);
+    } else {
+      // Persist the first due date even if it's in the future.
+      if (!e.nextDueDate || !e.lastGeneratedAt) {
+        await supabase.from('recurring_expenses').update({ next_due_date: nextDue }).eq('id', e.id);
+      }
+      next.push({ name: e.name, nextDueDate: nextDue });
     }
   }
   revalidatePath('/dashboard');
-  return { created };
+  return { created, next };
 }
 
 export async function saveRecurringExpense(data) {
@@ -1390,6 +1400,7 @@ export async function processDuePayroll() {
 
   let created = 0;
   let totalAmount = 0;
+  const next = [];
 
   for (const ws of settingsList) {
     if (!ws.payrollActive) continue;
@@ -1397,14 +1408,19 @@ export async function processDuePayroll() {
     if (!worker) continue;
 
     let nextPay = ws.nextPayrollDate;
-    if (!nextPay) {
+    if (!nextPay || !ws.lastPayrollPeriodEnd) {
+      // Un-anchored schedule (never generated a payroll row): recompute so a
+      // first run pays today when the configured pay day already passed.
       nextPay = computeInitialPayrollDate({ ...ws, ...worker }, todayIso);
       if (!nextPay) continue;
       await supabase.from('worker_settings')
         .update({ next_payroll_date: nextPay })
         .eq('worker_id', ws.workerId);
     }
-    if (nextPay > todayIso) continue;
+    if (nextPay > todayIso) {
+      next.push({ workerName: worker.name || worker.username, nextPayrollDate: nextPay });
+      continue;
+    }
 
     const { start, end } = computePayrollWindow(ws, nextPay);
 
@@ -1481,7 +1497,7 @@ export async function processDuePayroll() {
   }
 
   revalidatePath('/dashboard');
-  return { created, amount: Math.round(totalAmount * 100) / 100 };
+  return { created, amount: Math.round(totalAmount * 100) / 100, next };
 }
 
 /**
@@ -1495,6 +1511,8 @@ export async function processDueTransactions() {
     recurringCreated: recurring.created,
     payrollCreated: payroll.created,
     payrollAmount: payroll.amount,
+    nextRecurring: recurring.next,
+    nextPayrolls: payroll.next,
   };
 }
 
