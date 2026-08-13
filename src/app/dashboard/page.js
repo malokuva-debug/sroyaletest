@@ -1153,7 +1153,7 @@ function App() {
           <ShpenzimetView items={shpenzimet} onSave={handleSaveShpenzim} onDelete={handleDeleteShpenzim} t={t} fmtDate={fmtDate} confirmAsync={confirmAsync} />
         )}
         {tab === 'takimet' && (
-          <TakimetView items={appointments} onSave={handleSaveAppointment} onDelete={handleDeleteAppointment} services={services} clients={clients} onSaveClient={handleSaveClient}
+          <TakimetView items={appointments} onSave={handleSaveAppointment} onDelete={handleDeleteAppointment} services={services} categories={categories} clients={clients} onSaveClient={handleSaveClient}
             onComplete={completeAppointment} onCancel={cancelAppointment} onReopen={reopenAppointment} workers={workers} currentUser={user} t={t} lang={lang} fmtDate={fmtDate} rangeFor={rangeFor} nowTime={nowTime} confirmAsync={confirmAsync} additionalServices={additionalServices} onSaveAdditionalService={handleSaveAdditionalService} />
         )}
         {tab === 'me_shume' && !subview && (
@@ -1765,14 +1765,14 @@ function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClie
 /* =====================================================================
    TAKIMET
 ===================================================================== */
-function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient, onComplete, onCancel, onReopen, workers, currentUser, t, lang, fmtDate, rangeFor, nowTime, confirmAsync, additionalServices = [], onSaveAdditionalService }) {
+function TakimetView({ items, onSave, onDelete, services, categories = [], clients, onSaveClient, onComplete, onCancel, onReopen, workers, currentUser, t, lang, fmtDate, rangeFor, nowTime, confirmAsync, additionalServices = [], onSaveAdditionalService }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [period] = useState('monthly');
   const [refDate, setRefDate] = useState(() => nowKS());
   const [form, setForm] = useState({
-    clientName: '', phone: '', serviceId: '', serviceName: '',
+    clientName: '', phone: '', serviceId: '', serviceName: '', categoryId: '',
     date: todayISO(), time: nowTime(), extras: [],
     workerId: '', workerName: '',
   });
@@ -1784,7 +1784,7 @@ function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient,
       ? { workerId: currentUser.id, workerName: currentUser.name || currentUser.username }
       : { workerId: '', workerName: '' };
     setForm({
-      clientName: '', phone: '', serviceId: '', serviceName: '',
+      clientName: '', phone: '', serviceId: '', serviceName: '', categoryId: '',
       date: selectedDate, time: nowTime(), extras: [],
       ...preWorker,
     });
@@ -1792,9 +1792,10 @@ function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient,
   }
   function openEdit(it) {
     setEditing(it);
+    const svc = services.find(x => x.id === it.serviceId);
     setForm({
       clientId: it.clientId || "", clientName: it.clientName || '', phone: it.clientPhone || '', serviceId: it.serviceId || '',
-      serviceName: it.serviceName || '', date: it.date, time: it.time,
+      serviceName: it.serviceName || '', categoryId: svc?.categoryId || '', date: it.date, time: it.time,
       extras: Array.isArray(it.extras) ? it.extras : [],
       workerId: it.workerId || '', workerName: it.workerName || '',
     });
@@ -1802,7 +1803,10 @@ function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient,
   }
   function selectService(id) {
     const s = services.find(x => x.id === id);
-    setForm(f => ({ ...f, serviceId: id, serviceName: s?.name || '', extras: [] }));
+    setForm(f => ({ ...f, serviceId: id, serviceName: s?.name || '', categoryId: s?.categoryId || f.categoryId, extras: [] }));
+  }
+  function selectCategory(id) {
+    setForm(f => ({ ...f, categoryId: id, serviceId: '', serviceName: '', extras: [] }));
   }
 
   function addExtra() {
@@ -2025,13 +2029,29 @@ function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient,
                 onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} />
             </div>
             <div>
+              <Label className="text-xs">{t('kategoria')}</Label>
+              {categories.length > 0 ? (
+                <Select value={form.categoryId || '__all__'} onValueChange={(v) => selectCategory(v === '__all__' ? '' : v)}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder={t('zgjidh')} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">{t('te_gjitha_ketu')}</SelectItem>
+                    {categories.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input className="h-11" disabled placeholder="—" value="" />
+              )}
+            </div>
+            <div>
               <Label className="text-xs">{t('sherbimi_label')}</Label>
               {services.length > 0 ? (
                 <>
                   <Select value={form.serviceId} onValueChange={selectService}>
                     <SelectTrigger className="h-11"><SelectValue placeholder={t('zgjidh_sherbim')} /></SelectTrigger>
                     <SelectContent>
-                      {services.map(s => (
+                      {services.filter(s => !form.categoryId || s.categoryId === form.categoryId).map(s => (
                         <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -2789,6 +2809,20 @@ function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategor
         title={addonEditing ? t('modifiko_sherbimin_shtese') : t('shto_sherbim_shtese')}
         initial={addonEditing || { name: '', price: '', serviceId: '', active: true }}
         fields={[
+          ...(!addonEditing ? [{
+            name: 'template', label: t('zgjidh_nga_ekzistuesit'), type: 'select', required: false,
+            options: [
+              { value: '', label: '—' },
+              ...additionalServices.map(a => ({ value: a.id, label: `${a.name} — ${fmtMoney(a.price)}` })),
+            ],
+            onValueChange: (val, next, setForm) => {
+              if (!val) return;
+              const tpl = additionalServices.find(a => a.id === val);
+              if (tpl) {
+                setForm({ ...next, name: tpl.name, price: String(tpl.price ?? ''), serviceId: tpl.serviceId || '', active: tpl.active === false ? 'false' : 'true' });
+              }
+            },
+          }] : []),
           { name: 'name', label: t('emri'), type: 'text', required: true },
           { name: 'price', label: t('cmimi'), type: 'number', step: '0.01', required: true },
           {
@@ -2807,12 +2841,13 @@ function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategor
           },
         ]}
         onSave={async (form) => {
+          const { template, ...rest } = form;
           await onSaveAdditionalService({
             ...addonEditing,
-            ...form,
-            price: Number(form.price || 0),
-            serviceId: form.serviceId || null,
-            active: form.active !== 'false' && form.active !== false,
+            ...rest,
+            price: Number(rest.price || 0),
+            serviceId: rest.serviceId || null,
+            active: rest.active !== 'false' && rest.active !== false,
           });
           setAddonOpen(false); setAddonEditing(null);
         }}
@@ -5229,7 +5264,11 @@ function FormDialog({ open, onOpenChange, title, fields, initial, onSave, t }) {
                   rows={2}
                 />
               ) : f.type === 'select' ? (
-                <Select value={form[f.name] ?? ''} onValueChange={(val) => setForm({ ...form, [f.name]: val })}>
+                <Select value={form[f.name] ?? ''} onValueChange={(val) => {
+                  const next = { ...form, [f.name]: val };
+                  setForm(next);
+                  f.onValueChange?.(val, next, setForm);
+                }}>
                   <SelectTrigger className="h-11">
                     <SelectValue placeholder={f.placeholder || t('zgjidh')} />
                   </SelectTrigger>

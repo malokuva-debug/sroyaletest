@@ -154,6 +154,7 @@ export const translations = {
 
     // Categories
     kategoria: "Kategoria",
+    te_gjitha_ketu: "Të gjitha",
     kategorite_sherbimeve: "Kategoritë e Shërbimeve",
     asnje_kategori: "Asnjë kategori e shtuar.",
     shto_kategori: "Shto kategori",
@@ -469,6 +470,7 @@ export const translations = {
     asnje_sherbim_shtese: "Nuk ka shërbime shtesë të regjistruara.",
     fshi_sherbimin_shtese: "Fshi këtë shërbim shtesë?",
     modifiko_sherbimin_shtese: "Modifiko shërbimin shtesë",
+    zgjidh_nga_ekzistuesit: "Zgjidh nga shërbimet shtesë ekzistuese...",
     shto_sherbim_shtese_quick: "Emri i shërbimit shtesë...",
     vendos_emrin_e_sherbimit: "Shkruani emrin e shërbimit shtesë.",
     kerko_sherbim_shtese: "Kërko shërbim shtesë...",
@@ -680,6 +682,7 @@ export const translations = {
 
     // Categories
     kategoria: "Category",
+    te_gjitha_ketu: "All",
     kategorite_sherbimeve: "Service Categories",
     asnje_kategori: "No categories added yet.",
     shto_kategori: "Add category",
@@ -994,6 +997,7 @@ export const translations = {
     asnje_sherbim_shtese: "No additional services recorded.",
     fshi_sherbimin_shtese: "Delete this additional service?",
     modifiko_sherbimin_shtese: "Edit additional service",
+    zgjidh_nga_ekzistuesit: "Pick from existing additional services...",
     shto_sherbim_shtese_quick: "Name of the additional service...",
     vendos_emrin_e_sherbimit: "Enter a name for the additional service.",
     kerko_sherbim_shtese: "Search additional service...",
