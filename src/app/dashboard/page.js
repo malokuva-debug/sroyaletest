@@ -1,6 +1,6 @@
 'use client';
 
-import { getUser, createUser, getAllWorkers, getData, saveShpenzim, deleteShpenzim, saveProdukt, deleteProdukt, saveTeArdhur, deleteTeArdhur, saveClient, deleteClient, saveAppointment, deleteAppointment, saveService, deleteService, saveServiceCategory, deleteServiceCategory, saveWorkerServices, getWorkerServices, saveWorkerAdditionalServices, getWorkerAdditionalServices, saveWorkerSettings, getWorkerSettings, getAdditionalServices, saveAdditionalService, deleteAdditionalService, getRecurringExpenses, saveRecurringExpense, deleteRecurringExpense, applyRecurringExpenses, generatePayroll, markPayrollPaid, deletePayrollEntry, saveSettings as saveSettingsAction, deleteUser, createSession, getSessionUser, destroySession, getSetting, setupAdmin, testPush, getAnyOwner, getWorkerSchedule, saveWorkerSchedule, getWorkingHours, saveWorkingHours, getWorkerUnavailability, saveWorkerUnavailability, deleteWorkerUnavailability } from "@/lib/actions";
+import { getUser, createUser, getAllWorkers, getData, saveShpenzim, deleteShpenzim, saveProdukt, deleteProdukt, saveTeArdhur, deleteTeArdhur, saveClient, deleteClient, saveAppointment, deleteAppointment, saveService, deleteService, saveServiceCategory, deleteServiceCategory, saveWorkerServices, getWorkerServices, saveWorkerAdditionalServices, getWorkerAdditionalServices, saveWorkerSettings, getWorkerSettings, getAdditionalServices, saveAdditionalService, deleteAdditionalService, getRecurringExpenses, saveRecurringExpense, deleteRecurringExpense, processDueTransactions, deletePayrollEntry, saveSettings as saveSettingsAction, deleteUser, createSession, getSessionUser, destroySession, getSetting, setupAdmin, testPush, getAnyOwner, getWorkerSchedule, saveWorkerSchedule, getWorkingHours, saveWorkingHours, getWorkerUnavailability, saveWorkerUnavailability, deleteWorkerUnavailability } from "@/lib/actions";
 import { translations } from "@/lib/dashboard-translations";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -271,10 +271,7 @@ function App() {
         if (sessionUser.role === 'owner' && !autoGenRef.current) {
           autoGenRef.current = true;
           try {
-            const d = nowKS();
-            const period = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            await applyRecurringExpenses();
-            await generatePayroll(period);
+            await processDueTransactions();
             await refreshData(sessionUser);
           } catch (err) {
             console.error('Auto-generate failed:', err?.message || err);
@@ -3145,6 +3142,7 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
   const [settingsWorker, setSettingsWorker] = useState(null);
   const [settingsTab, setSettingsTab] = useState('services');
   const [salaryForm, setSalaryForm] = useState({});
+  const [payrollForm, setPayrollForm] = useState({});
   const [serviceSel, setServiceSel] = useState({});
   const [addonSel, setAddonSel] = useState({});
 
@@ -3176,6 +3174,14 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
   function openSettings(w) {
     const ws = workerSettings.find(x => x.workerId === w.id);
     setSalaryForm(prev => ({ ...prev, [w.id]: ws?.salaryPercent ?? '' }));
+    setPayrollForm(prev => ({ ...prev, [w.id]: {
+      payrollActive: ws?.payrollActive ?? false,
+      payrollFrequency: ws?.payrollFrequency || 'monthly',
+      payrollDay: ws?.payrollDay ?? 1,
+      payrollMonth: ws?.payrollMonth ?? 1,
+      payrollStartDate: ws?.payrollStartDate || '',
+      nextPayrollDate: ws?.nextPayrollDate || '',
+    } }));
     setServiceSel(prev => ({ ...prev, [w.id]: new Set(services.map(s => s.id)) }));
     setAddonSel(prev => ({ ...prev, [w.id]: new Set(additionalServices.filter(a => a.active !== false).map(a => a.id)) }));
     setSettingsTab('services');
@@ -3229,6 +3235,43 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
     });
     toast.success(t('paga_u_ruajt'));
   }
+
+  async function savePayrollFor(w) {
+    const form = payrollForm[w.id] || {};
+    const freq = form.payrollFrequency || 'monthly';
+    const payload = {
+      payrollActive: !!form.payrollActive,
+      payrollFrequency: freq,
+      payrollDay: freq === 'weekly' ? Number(form.payrollDay ?? 0) : Number(form.payrollDay ?? 1),
+      payrollMonth: freq === 'yearly' ? Number(form.payrollMonth ?? 1) : undefined,
+      payrollStartDate: form.payrollStartDate || undefined,
+      nextPayrollDate: form.nextPayrollDate || undefined,
+    };
+    await saveWorkerSettings(w.id, payload);
+    setWorkerSettingsState?.(prev => {
+      const existing = prev.find(x => x.workerId === w.id) || { workerId: w.id };
+      return [...prev.filter(x => x.workerId !== w.id), { ...existing, ...payload }];
+    });
+    toast.success(t('paga_u_ruajt'));
+  }
+
+  const payrollWeekdayOptions = [
+    { value: '1', label: t('e_hene') },
+    { value: '2', label: t('e_marte') },
+    { value: '3', label: t('e_merkure') },
+    { value: '4', label: t('e_enjte') },
+    { value: '5', label: t('e_premte') },
+    { value: '6', label: t('e_shtune') },
+    { value: '0', label: t('e_diele') },
+  ];
+  const payrollMonthOptions = [
+    { value: '1', label: t('janar') }, { value: '2', label: t('shkurt') },
+    { value: '3', label: t('mars') }, { value: '4', label: t('prill') },
+    { value: '5', label: t('maj') }, { value: '6', label: t('qershor') },
+    { value: '7', label: t('korrik') }, { value: '8', label: t('gusht') },
+    { value: '9', label: t('shtator') }, { value: '10', label: t('tetor') },
+    { value: '11', label: t('nentor') }, { value: '12', label: t('dhjetor') },
+  ];
 
   return (
     <Card>
@@ -3337,10 +3380,11 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
 
           {settingsWorker && (
             <Tabs value={settingsTab} onValueChange={setSettingsTab}>
-              <TabsList className="grid grid-cols-3 w-full h-9">
+              <TabsList className="grid grid-cols-4 w-full h-9">
                 <TabsTrigger className="text-xs px-1" value="services">{t('sherbimet')}</TabsTrigger>
                 <TabsTrigger className="text-xs px-1" value="addons">{t('sherbime_shtese')}</TabsTrigger>
                 <TabsTrigger className="text-xs px-1" value="salary">{t('paga')}</TabsTrigger>
+                <TabsTrigger className="text-xs px-1" value="payroll">{t('pagesa_automatike')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="services" className="mt-4 space-y-2">
@@ -3485,6 +3529,94 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
                     <Save className="w-3.5 h-3.5 mr-1" /> {t('ruaj')}
                   </Button>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="payroll" className="mt-4 space-y-3">
+                <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+                  <Label className="text-xs">{t('pagesa_automatike')}</Label>
+                  <Switch
+                    checked={!!payrollForm[settingsWorker.id]?.payrollActive}
+                    onCheckedChange={(val) => setPayrollForm(prev => ({ ...prev, [settingsWorker.id]: { ...prev[settingsWorker.id], payrollActive: val } }))}
+                  />
+                </div>
+
+                {payrollForm[settingsWorker.id]?.payrollActive && (
+                  <>
+                    <div className="space-y-1">
+                      <Label className="text-xs">{t('frekuenca_e_pagesave')}</Label>
+                      <Select
+                        value={payrollForm[settingsWorker.id]?.payrollFrequency || 'monthly'}
+                        onValueChange={(val) => setPayrollForm(prev => ({ ...prev, [settingsWorker.id]: { ...prev[settingsWorker.id], payrollFrequency: val } }))}>
+                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="weekly">{t('javore')}</SelectItem>
+                          <SelectItem value="monthly">{t('mujore')}</SelectItem>
+                          <SelectItem value="yearly">{t('vjetore')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {(() => {
+                      const freq = payrollForm[settingsWorker.id]?.payrollFrequency || 'monthly';
+                      const pf = payrollForm[settingsWorker.id] || {};
+                      if (freq === 'weekly') {
+                        return (
+                          <div className="space-y-1">
+                            <Label className="text-xs">{t('dita_e_pageses_javore')}</Label>
+                            <Select
+                              value={String(pf.payrollDay ?? 1)}
+                              onValueChange={(val) => setPayrollForm(prev => ({ ...prev, [settingsWorker.id]: { ...prev[settingsWorker.id], payrollDay: val } }))}>
+                              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {payrollWeekdayOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 space-y-1">
+                            <Label className="text-xs">{t('dita_e_muajit')}</Label>
+                            <Input type="number" min="1" max="31" className="h-10"
+                              value={pf.payrollDay ?? ''}
+                              onChange={(e) => setPayrollForm(prev => ({ ...prev, [settingsWorker.id]: { ...prev[settingsWorker.id], payrollDay: e.target.value } }))} />
+                          </div>
+                          {freq === 'yearly' && (
+                            <div className="flex-1 space-y-1">
+                              <Label className="text-xs">{t('muaji')}</Label>
+                              <Select
+                                value={String(pf.payrollMonth ?? 1)}
+                                onValueChange={(val) => setPayrollForm(prev => ({ ...prev, [settingsWorker.id]: { ...prev[settingsWorker.id], payrollMonth: val } }))}>
+                                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {payrollMonthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    <div className="space-y-1">
+                      <Label className="text-xs">{t('data_fillimit_pagesave')}</Label>
+                      <Input type="date" className="h-10"
+                        value={payrollForm[settingsWorker.id]?.payrollStartDate || ''}
+                        onChange={(e) => setPayrollForm(prev => ({ ...prev, [settingsWorker.id]: { ...prev[settingsWorker.id], payrollStartDate: e.target.value } }))} />
+                    </div>
+
+                    {payrollForm[settingsWorker.id]?.nextPayrollDate && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {t('next_payroll')}: {payrollForm[settingsWorker.id].nextPayrollDate}
+                      </p>
+                    )}
+
+                    <Button size="sm" variant="outline" className="w-full h-9 text-xs" onClick={() => savePayrollFor(settingsWorker)}>
+                      <Save className="w-3.5 h-3.5 mr-1" /> {t('ruaj')}
+                    </Button>
+                  </>
+                )}
               </TabsContent>
             </Tabs>
           )}
@@ -3957,25 +4089,36 @@ function WorkerUnavailabilityCard({ workers, settings, setSettings, t, toast }) 
 }
 
 /* =====================================================================
-   RECURRING EXPENSES
+   RECURRING EXPENSES (fully automatic — configuration only)
 ===================================================================== */
-function RecurringExpensesCard({ items, onSave, onDelete, onApply, t, confirmAsync }) {
+function RecurringExpensesCard({ items, onSave, onDelete, t, confirmAsync }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [applying, setApplying] = useState(false);
-
-  async function handleApply() {
-    setApplying(true);
-    try {
-      const res = await onApply();
-      toast.success(t('shpenzimet_u_gjeneruan').replace('{}', res?.created ?? 0));
-    } finally {
-      setApplying(false);
-    }
-  }
+  const [formFreq, setFormFreq] = useState('monthly');
 
   const freqLabel = (f) =>
     f === 'weekly' ? t('javore') : f === 'yearly' ? t('vjetore') : t('mujore');
+
+  const weekdayOptions = [
+    { value: '1', label: t('e_hene') },
+    { value: '2', label: t('e_marte') },
+    { value: '3', label: t('e_merkure') },
+    { value: '4', label: t('e_enjte') },
+    { value: '5', label: t('e_premte') },
+    { value: '6', label: t('e_shtune') },
+    { value: '0', label: t('e_diele') },
+  ];
+
+  const monthOptions = [
+    { value: '1', label: t('janar') }, { value: '2', label: t('shkurt') },
+    { value: '3', label: t('mars') }, { value: '4', label: t('prill') },
+    { value: '5', label: t('maj') }, { value: '6', label: t('qershor') },
+    { value: '7', label: t('korrik') }, { value: '8', label: t('gusht') },
+    { value: '9', label: t('shtator') }, { value: '10', label: t('tetor') },
+    { value: '11', label: t('nentor') }, { value: '12', label: t('dhjetor') },
+  ];
+
+  const openNew = () => { setEditing(null); setFormFreq('monthly'); setOpen(true); };
 
   return (
     <Card>
@@ -3984,15 +4127,9 @@ function RecurringExpensesCard({ items, onSave, onDelete, onApply, t, confirmAsy
           <CardTitle className="text-base flex items-center gap-2">
             <RotateCcw className="w-4 h-4" /> {t('shpenzimet_periodike')}
           </CardTitle>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={handleApply} disabled={applying}>
-              {applying ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1" />}
-              {t('gjenero_tani')}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => { setEditing(null); setOpen(true); }}>
-              <Plus className="w-4 h-4 mr-1" /> {t('shto')}
-            </Button>
-          </div>
+          <Button size="sm" variant="outline" onClick={openNew}>
+            <Plus className="w-4 h-4 mr-1" /> {t('shto')}
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-1.5">
@@ -4005,11 +4142,17 @@ function RecurringExpensesCard({ items, onSave, onDelete, onApply, t, confirmAsy
               <div className="min-w-0">
                 <p className="font-medium truncate">{r.name} <span className="text-xs text-muted-foreground tabular-nums">{fmtMoney(r.amount)}</span></p>
                 <p className="text-[10px] text-muted-foreground">
-                  {freqLabel(r.frequency)}{r.nextDueDate ? ` · ${t('next_due')}: ${r.nextDueDate}` : ''}
+                  {freqLabel(r.frequency)}
+                  {r.nextDueDate ? ` · ${t('next_due')}: ${r.nextDueDate}` : ''}
+                  {r.startDate ? ` · ${t('data_fillimit')}: ${r.startDate}` : ''}
+                  {r.endDate ? ` · ${t('data_mbarimit')}: ${r.endDate}` : ''}
                 </p>
               </div>
-              <div className="flex gap-1 shrink-0">
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditing(r); setOpen(true); }}>
+              <div className="flex gap-1 shrink-0 items-center">
+                <Badge variant="outline" className={cn('text-[10px]', r.active !== false ? 'text-emerald-600' : 'text-rose-600')}>
+                  {r.active !== false ? t('aktive') : t('jo_aktive')}
+                </Badge>
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setFormFreq(r.frequency || 'monthly'); setEditing(r); setOpen(true); }}>
                   <Pencil className="w-3.5 h-3.5" />
                 </Button>
                 <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" onClick={async () => {
@@ -4026,7 +4169,7 @@ function RecurringExpensesCard({ items, onSave, onDelete, onApply, t, confirmAsy
       <FormDialog t={t}
         open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditing(null); }}
         title={editing ? t('modifiko_shpenzimin_periodik') : t('shto_shpenzim_periodik')}
-        initial={editing || { name: '', amount: '', frequency: 'monthly', dayOfMonth: 1, nextDueDate: '' }}
+        initial={editing || { name: '', amount: '', frequency: 'monthly', dayOfMonth: 1, weekday: '1', month: 1, active: true, startDate: '', endDate: '', nextDueDate: '' }}
         fields={[
           { name: 'name', label: t('emri'), type: 'text', required: true },
           { name: 'amount', label: t('shuma'), type: 'number', step: '0.01', required: true },
@@ -4037,12 +4180,34 @@ function RecurringExpensesCard({ items, onSave, onDelete, onApply, t, confirmAsy
               { value: 'weekly', label: t('javore') },
               { value: 'yearly', label: t('vjetore') },
             ],
+            onValueChange: (val) => setFormFreq(val),
           },
-          { name: 'dayOfMonth', label: t('dita_e_muajit'), type: 'number' },
+          ...(formFreq === 'weekly' ? [{
+            name: 'weekday', label: t('dita_e_javes'), type: 'select', options: weekdayOptions,
+          }] : [
+            { name: 'dayOfMonth', label: t('dita_e_muajit'), type: 'number' },
+          ]),
+          ...(formFreq === 'yearly' ? [{
+            name: 'month', label: t('muaji'), type: 'select', options: monthOptions,
+          }] : []),
+          { name: 'startDate', label: t('data_fillimit'), type: 'date' },
+          { name: 'endDate', label: t('data_mbarimit'), type: 'date' },
           { name: 'nextDueDate', label: t('data_e_pageses'), type: 'date' },
+          { name: 'active', label: t('aktive'), type: 'switch' },
         ]}
         onSave={async (form) => {
-          await onSave({ ...editing, ...form, amount: Number(form.amount || 0) });
+          const freq = form.frequency || 'monthly';
+          const payload = {
+            ...editing,
+            ...form,
+            frequency: freq,
+            amount: Number(form.amount || 0),
+            dayOfMonth: freq === 'weekly' ? undefined : Number(form.dayOfMonth || 1),
+            weekday: freq === 'weekly' ? Number(form.weekday || 1) : undefined,
+            month: freq === 'yearly' ? Number(form.month || 1) : undefined,
+            active: form.active !== false,
+          };
+          await onSave(payload);
           setOpen(false); setEditing(null);
         }}
       />
@@ -4051,27 +4216,16 @@ function RecurringExpensesCard({ items, onSave, onDelete, onApply, t, confirmAsy
 }
 
 /* =====================================================================
-   PAYROLL
+   PAYROLL HISTORY (fully automatic — review only)
 ===================================================================== */
-function PayrollCard({ payroll = [], onGenerate, onMarkPaid, onDelete, onRefresh, confirmAsync, t }) {
+function PayrollCard({ payroll = [], onDelete, confirmAsync, t }) {
   const [period, setPeriod] = useState(() => {
     const d = nowKS();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
-  const [generating, setGenerating] = useState(false);
 
   const rows = payroll.filter(p => p.period === period).sort((a, b) => (a.workerName || '').localeCompare(b.workerName || ''));
   const totalPay = rows.reduce((s, r) => s + Number(r.salaryAmount || 0), 0);
-
-  async function handleGenerate() {
-    setGenerating(true);
-    try {
-      const res = await onGenerate(period);
-      if (res) toast.success(t('lista_ruajtur'));
-    } finally {
-      setGenerating(false);
-    }
-  }
 
   return (
     <Card>
@@ -4082,10 +4236,6 @@ function PayrollCard({ payroll = [], onGenerate, onMarkPaid, onDelete, onRefresh
           </CardTitle>
           <div className="flex items-center gap-2">
             <Input type="month" className="h-8 w-36 text-xs" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} />
-            <Button size="sm" variant="outline" onClick={handleGenerate} disabled={generating}>
-              {generating ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1" />}
-              {t('gjenero')}
-            </Button>
           </div>
         </div>
       </CardHeader>
@@ -4100,16 +4250,6 @@ function PayrollCard({ payroll = [], onGenerate, onMarkPaid, onDelete, onRefresh
                 <div className="flex items-center justify-between">
                   <p className="font-medium">{p.workerName || '—'}</p>
                   <div className="flex gap-1 shrink-0">
-                    {p.status !== 'paid' && (
-                      <Button size="sm" variant="outline" className="h-7 text-[11px] text-emerald-700" onClick={async () => {
-                        if (await confirmAsync(t('paguaj_listen'), t('paguaj'))) {
-                          const res = await onMarkPaid(p.id);
-                          if (res) { toast.success(`${t('paguar')}: ${fmtMoney(res.amount)}`); onRefresh?.(); }
-                        }
-                      }}>
-                        <Check className="w-3 h-3 mr-1" /> {t('paguaj')}
-                      </Button>
-                    )}
                     <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" onClick={async () => {
                       if (await confirmAsync(t('fshi_listen'))) { onDelete(p.id); toast.success(t('u_fshi')); }
                     }}>
@@ -4118,6 +4258,7 @@ function PayrollCard({ payroll = [], onGenerate, onMarkPaid, onDelete, onRefresh
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                  {p.periodStart && p.periodEnd && <span>{p.periodStart} → {p.periodEnd}</span>}
                   <span>{t('sherbimet')}: {fmtMoney(p.serviceRevenue)}</span>
                   <span>{t('shtese')}: {fmtMoney(p.extraRevenue)}</span>
                   <span>{t('total_label')}: {fmtMoney(p.totalRevenue)}</span>
@@ -4220,23 +4361,12 @@ function CilesimetView({ user, setUser, workers, setWorkers, settings, setSettin
         }} onDelete={(id) => {
           setRecurringExpenses(prev => prev.filter(x => x.id !== id));
           return deleteRecurringExpense(id).catch(() => toast.error('Gabim në fshirje'));
-        }} onApply={async () => {
-          const res = await applyRecurringExpenses();
-          onRefresh?.();
-          return res;
         }} t={t} confirmAsync={confirmAsync} />
       )}
 
       {isOwner && (
         <PayrollCard payroll={payroll}
-          onGenerate={async (period) => {
-            const res = await generatePayroll(period);
-            onRefresh?.();
-            return res;
-          }}
-          onMarkPaid={async (id) => { const res = await markPayrollPaid(id); onRefresh?.(); return res; }}
           onDelete={async (id) => { await deletePayrollEntry(id); setPayroll(prev => prev.filter(x => x.id !== id)); }}
-          onRefresh={onRefresh}
           confirmAsync={confirmAsync}
           t={t} />
       )}
@@ -5262,7 +5392,7 @@ function FormDialog({ open, onOpenChange, title, fields, initial, onSave, t }) {
         <div className="space-y-3">
           {fields.map(f => (
             <div key={f.name}>
-              <Label className="text-xs">{f.label}{f.required && ' *'}</Label>
+              {f.type !== 'switch' && <Label className="text-xs">{f.label}{f.required && ' *'}</Label>}
               {f.type === 'textarea' ? (
                 <Textarea
                   value={form[f.name] ?? ''}
@@ -5293,6 +5423,14 @@ function FormDialog({ open, onOpenChange, title, fields, initial, onSave, t }) {
                     ))}
                   </SelectContent>
                 </Select>
+              ) : f.type === 'switch' ? (
+                <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+                  <Label className="text-xs cursor-pointer">{f.label}</Label>
+                  <Switch
+                    checked={!!form[f.name]}
+                    onCheckedChange={(val) => setForm({ ...form, [f.name]: val })}
+                  />
+                </div>
               ) : (
                 <Input
                   className="h-11"

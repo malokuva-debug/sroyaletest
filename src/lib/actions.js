@@ -972,14 +972,42 @@ export async function getWorkerSettings() {
 
 export async function saveWorkerSettings(workerId, settings) {
   const row = {
-    worker_id:     workerId,
-    salary_percent: settings.salaryPercent != null ? Number(settings.salaryPercent) : null,
-    notes:          settings.notes || null,
+    worker_id:          workerId,
+    salary_percent:     settings.salaryPercent != null ? Number(settings.salaryPercent) : null,
+    notes:              settings.notes || null,
+    payroll_active:     settings.payrollActive !== undefined ? !!settings.payrollActive : undefined,
+    payroll_frequency:  settings.payrollFrequency || null,
+    payroll_day:        settings.payrollDay != null ? Number(settings.payrollDay) : null,
+    payroll_month:      settings.payrollMonth != null ? Number(settings.payrollMonth) : null,
+    payroll_start_date: settings.payrollStartDate || null,
+    next_payroll_date:  settings.nextPayrollDate || null,
   };
+  // Skip unset keys so a partial save (e.g. just toggling salary %) can't
+  // wipe payroll settings the client didn't send.
+  for (const k of Object.keys(row)) {
+    if (row[k] === undefined) delete row[k];
+  }
+
   const { data: existing } = await supabase
     .from('worker_settings')
-    .select('worker_id')
+    .select('worker_id, next_payroll_date')
     .eq('worker_id', workerId);
+  const storedNext = existing?.[0]?.next_payroll_date;
+
+  // Only compute a next-pay date when activating a worker that has none yet;
+  // otherwise preserve the stored schedule untouched.
+  if (row.payroll_active && !row.next_payroll_date && !storedNext) {
+    const initial = computeInitialPayrollDate({
+      payrollFrequency: row.payroll_frequency,
+      payrollDay: row.payroll_day,
+      payrollMonth: row.payroll_month,
+      payrollStartDate: row.payroll_start_date || undefined,
+    }, getTodayKS());
+    if (initial) row.next_payroll_date = initial;
+  } else if (row.next_payroll_date == null) {
+    delete row.next_payroll_date;
+  }
+
   if (existing && existing.length > 0) {
     await supabase.from('worker_settings').update(row).eq('worker_id', workerId);
   } else {
@@ -1176,9 +1204,40 @@ function computeNextDue(entry, fromIso) {
 }
 
 /**
- * Materialises every recurring expense that is due into shpenzimet and
- * advances its next_due_date. Intended to be run once per day (dashboard
- * button and/or the reminders cron). Returns the number of rows created.
+ * Insert a shpenzimet row unless one with the same source_id already exists.
+ * source_id links auto-generated transactions to their origin
+ * (`recurring:<id>:<date>` or `payroll:<workerId>:<periodStart>`) so re-runs
+ * (cron + dashboard boot) never create duplicates, even if a previous run
+ * crashed between the insert and the schedule advance.
+ */
+async function insertExpenseOnce({ sourceId, ...row }) {
+  if (sourceId) {
+    const { data: existing } = await supabase
+      .from('shpenzimet')
+      .select('id')
+      .eq('source_id', sourceId);
+    if (existing && existing.length > 0) return false;
+  }
+  const payload = { id: uuid(), ...row, sourceId: sourceId || null };
+  try {
+    await supabase.from('shpenzimet').insert(toSnake(payload));
+    return true;
+  } catch (err) {
+    // Pre-migration safety: strip columns that don't exist yet.
+    if (String(err).includes('column') || String(err).includes('no such column')) {
+      const base = { id: payload.id, description: payload.description, amount: payload.amount, date: payload.date };
+      if (payload.category) base.category = payload.category;
+      await supabase.from('shpenzimet').insert(toSnake(base));
+      return true;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Materialises every due recurring expense into shpenzimet, honouring the
+ * start_date / end_date scheduling window and catching up any missed
+ * occurrences since the last run. Returns the number of rows created.
  */
 export async function applyRecurringExpenses() {
   const t = await getT();
@@ -1189,28 +1248,35 @@ export async function applyRecurringExpenses() {
 
   for (const e of expenses) {
     if (e.active === false) continue;
-    let nextDue = e.nextDueDate;
-    if (!nextDue) {
-      nextDue = computeFirstDue(e, todayIso);
+
+    let nextDue = e.nextDueDate || computeFirstDue(e, todayIso);
+    if (e.startDate && nextDue < e.startDate) nextDue = e.startDate;
+    if (e.endDate && nextDue > e.endDate) continue;
+
+    let occurrences = 0;
+    while (nextDue <= todayIso && (!e.endDate || nextDue <= e.endDate)) {
+      const inserted = await insertExpenseOnce({
+        sourceId: `recurring:${e.id}:${nextDue}`,
+        description: `${e.name}${e.description ? ` — ${e.description}` : ''}`,
+        amount: Number(e.amount || 0),
+        date: nextDue,
+        category: e.category || t('shpenzime_tjera'),
+        type: 'recurring',
+      });
+      if (inserted) created += 1;
+      occurrences += 1;
+      nextDue = computeNextDue(e, nextDue);
+    }
+
+    if (occurrences > 0) {
+      await supabase.from('recurring_expenses').update({
+        next_due_date: nextDue,
+        last_generated_at: todayIso,
+      }).eq('id', e.id);
+    } else if (!e.nextDueDate) {
+      // First run: persist the computed first due date even if it's in the future.
       await supabase.from('recurring_expenses').update({ next_due_date: nextDue }).eq('id', e.id);
     }
-    if (nextDue > todayIso) continue;
-
-    await supabase.from('shpenzimet').insert({
-      id:          uuid(),
-      description: `${e.name}${e.description ? ` — ${e.description}` : ''}`,
-      amount:      Number(e.amount || 0),
-      date:        nextDue <= todayIso ? nextDue : todayIso,
-      category:    e.category || t('shpenzime_tjera'),
-      type:        'recurring',
-    });
-    created += 1;
-
-    const advanced = computeNextDue(e, nextDue);
-    await supabase.from('recurring_expenses').update({
-      next_due_date: advanced,
-      last_generated_at: todayIso,
-    }).eq('id', e.id);
   }
   revalidatePath('/dashboard');
   return { created };
@@ -1228,6 +1294,8 @@ export async function saveRecurringExpense(data) {
     month:           data.month != null ? Number(data.month) : null,
     weekday:         data.weekday != null ? Number(data.weekday) : null,
     nextDueDate:     data.nextDueDate || null,
+    startDate:       data.startDate || null,
+    endDate:         data.endDate || null,
     active:          data.active !== false,
     lastGeneratedAt: data.lastGeneratedAt || null,
   };
@@ -1244,6 +1312,189 @@ export async function saveRecurringExpense(data) {
 export async function deleteRecurringExpense(id) {
   await supabase.from('recurring_expenses').delete().eq('id', id);
   revalidatePath('/dashboard');
+}
+
+// ─── Automatic payroll ───────────────────────────────────────────────────────
+
+function addDays(iso, days) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+}
+
+function computeInitialPayrollDate(worker, todayIso) {
+  if (worker.payrollStartDate) return worker.payrollStartDate;
+  const freq = worker.payrollFrequency || 'monthly';
+  const day = worker.payrollDay != null ? Number(worker.payrollDay) : 1;
+  const today = new Date(`${todayIso}T00:00:00Z`);
+  const y = today.getUTCFullYear();
+  const m = today.getUTCMonth() + 1;
+  if (freq === 'weekly') {
+    const targetDow = ((day % 7) + 7) % 7;
+    const dow = today.getUTCDay();
+    let diff = (targetDow - dow + 7) % 7;
+    if (diff === 0) diff = 7;
+    return addDays(todayIso, diff);
+  }
+  if (freq === 'yearly') {
+    const month = worker.payrollMonth != null ? Number(worker.payrollMonth) : 1;
+    let cand = `${y}-${pad2(month)}-${pad2(Math.min(day, new Date(Date.UTC(y, month, 0)).getUTCDate()))}`;
+    if (cand <= todayIso) cand = `${y + 1}-${pad2(month)}-${pad2(Math.min(day, new Date(Date.UTC(y + 1, month, 0)).getUTCDate()))}`;
+    return cand;
+  }
+  let cand = `${y}-${pad2(m)}-${pad2(Math.min(day, new Date(Date.UTC(y, m, 0)).getUTCDate()))}`;
+  if (cand <= todayIso) {
+    const next = new Date(Date.UTC(y, m, 1));
+    const ny = next.getUTCFullYear();
+    const nm = next.getUTCMonth() + 1;
+    cand = `${ny}-${pad2(nm)}-${pad2(Math.min(day, new Date(Date.UTC(ny, nm, 0)).getUTCDate()))}`;
+  }
+  return cand;
+}
+
+function computePayrollWindow(worker, payDate) {
+  const freq = worker.payrollFrequency || 'monthly';
+  let start;
+  if (freq === 'weekly') start = addDays(payDate, -6);
+  else if (freq === 'yearly') start = addMonths(payDate, -12);
+  else start = addMonths(payDate, -1);
+  if (worker.lastPayrollPeriodEnd && start <= worker.lastPayrollPeriodEnd) {
+    start = addDays(worker.lastPayrollPeriodEnd, 1);
+  }
+  if (start > payDate) start = payDate;
+  return { start, end: payDate };
+}
+
+function computeNextPayrollDate(worker, payDate) {
+  const freq = worker.payrollFrequency || 'monthly';
+  if (freq === 'weekly') return addDays(payDate, 7);
+  if (freq === 'yearly') return addMonths(payDate, 12);
+  return addMonths(payDate, 1);
+}
+
+/**
+ * Generates due payroll for every worker with payroll_active = true and posts
+ * the salary as an expense. Idempotent: each (worker, period_start, period_end)
+ * window is processed exactly once thanks to the partial unique index
+ * payroll_worker_period_unique and the payroll:source_id on shpenzimet.
+ */
+export async function processDuePayroll() {
+  const t = await getT();
+  const todayIso = getTodayKS();
+
+  const settingsList = await getWorkerSettings();
+  const { data: usersRes } = await supabase.from('users').select('*');
+  const users = toCamelArray(usersRes ?? []);
+  const userMap = Object.fromEntries(users.map(u => [u.id, u]));
+
+  let created = 0;
+  let totalAmount = 0;
+
+  for (const ws of settingsList) {
+    if (!ws.payrollActive) continue;
+    const worker = userMap[ws.workerId];
+    if (!worker) continue;
+
+    let nextPay = ws.nextPayrollDate;
+    if (!nextPay) {
+      nextPay = computeInitialPayrollDate({ ...ws, ...worker }, todayIso);
+      if (!nextPay) continue;
+      await supabase.from('worker_settings')
+        .update({ next_payroll_date: nextPay })
+        .eq('worker_id', ws.workerId);
+    }
+    if (nextPay > todayIso) continue;
+
+    const { start, end } = computePayrollWindow(ws, nextPay);
+
+    const { data: revRows } = await supabase
+      .from('te_ardhurat')
+      .select('*')
+      .gte('date', start)
+      .lte('date', end)
+      .eq('worker_id', ws.workerId);
+
+    let service = 0;
+    let extra = 0;
+    for (const r of toCamelArray(revRows ?? [])) {
+      let extrasSum = 0;
+      if (r.extras) {
+        try { extrasSum = (JSON.parse(r.extras) || []).reduce((s, e) => s + Number(e?.price || 0), 0); } catch {}
+      }
+      extra += extrasSum;
+      service += Number(r.price || 0) - extrasSum;
+    }
+    const totalRevenue = Math.round((service + extra) * 100) / 100;
+    const salaryPercent = ws.salaryPercent != null ? Number(ws.salaryPercent) : 0;
+    const salaryAmount = Math.round(totalRevenue * salaryPercent / 100 * 100) / 100;
+
+    let inserted = false;
+    {
+      const payrollRow = {
+        id:                uuid(),
+        period:            start.slice(0, 7),
+        periodStart:       start,
+        periodEnd:         end,
+        workerId:          ws.workerId,
+        workerName:        worker.name || worker.username,
+        serviceRevenue:    service,
+        extraRevenue:      extra,
+        totalRevenue,
+        salaryPercent:     salaryPercent != null ? salaryPercent : null,
+        salaryAmount,
+        appointmentCount:  revRows?.length || 0,
+        status:            'paid',
+        paidAt:            new Date().toISOString(),
+      };
+      try {
+        await supabase.from('payroll').insert(toSnake(payrollRow));
+        inserted = true;
+      } catch (err) {
+        // Unique race (payroll_worker_period_unique) → window already done.
+        if (!(String(err).includes('duplicate') || String(err).includes('unique'))) throw err;
+      }
+    }
+
+    if (salaryAmount > 0) {
+      await insertExpenseOnce({
+        sourceId: `payroll:${ws.workerId}:${start}`,
+        description: `${t('paga')}: ${worker.name || worker.username} (${start} → ${end})`,
+        amount: salaryAmount,
+        date: end,
+        category: t('paga'),
+        type: 'salary',
+        workerId: ws.workerId,
+      });
+    }
+
+    if (inserted) {
+      created += 1;
+      totalAmount += salaryAmount;
+    }
+
+    const advanced = computeNextPayrollDate(ws, nextPay);
+    await supabase.from('worker_settings').update({
+      next_payroll_date: advanced,
+      last_payroll_period_end: end,
+    }).eq('worker_id', ws.workerId);
+  }
+
+  revalidatePath('/dashboard');
+  return { created, amount: Math.round(totalAmount * 100) / 100 };
+}
+
+/**
+ * Single entry point for the daily automation sweep: recurring expenses first,
+ * then worker payroll. Used by the reminders cron and the dashboard boot.
+ */
+export async function processDueTransactions() {
+  const recurring = await applyRecurringExpenses();
+  const payroll = await processDuePayroll();
+  return {
+    recurringCreated: recurring.created,
+    payrollCreated: payroll.created,
+    payrollAmount: payroll.amount,
+  };
 }
 
 // ─── Payroll ─────────────────────────────────────────────────────────────────

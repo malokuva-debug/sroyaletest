@@ -508,6 +508,16 @@ export const translations = {
     data_e_pageses: "Data e pagesës",
     next_due: "Pagesa e ardhshme",
     shpenzimet_u_gjeneruan: "U shtuan {} shpenzime",
+    jo_aktive: "Jo aktive",
+    dita_e_javes: "Dita e javës",
+    muaji: "Muaji",
+    data_fillimit: "Data e fillimit",
+    data_mbarimit: "Data e mbarimit",
+    pagesa_automatike: "Paga automatike",
+    frekuenca_e_pagesave: "Frekuenca e pagesave",
+    dita_e_pageses_javore: "Dita e pagesës (javore)",
+    data_fillimit_pagesave: "Data e fillimit të pagesave",
+    next_payroll: "Paga tjetër",
 
     // Payroll
     listapagat: "Listapagat",
@@ -1037,6 +1047,16 @@ export const translations = {
     data_e_pageses: "Payment date",
     next_due: "Next due",
     shpenzimet_u_gjeneruan: "Added {} expenses",
+    jo_aktive: "Inactive",
+    dita_e_javes: "Weekday",
+    muaji: "Month",
+    data_fillimit: "Start date",
+    data_mbarimit: "End date",
+    pagesa_automatike: "Automatic payroll",
+    frekuenca_e_pagesave: "Payroll frequency",
+    dita_e_pageses_javore: "Pay day (weekly)",
+    data_fillimit_pagesave: "Payroll start date",
+    next_payroll: "Next payroll",
 
     // Payroll
     listapagat: "Payroll",

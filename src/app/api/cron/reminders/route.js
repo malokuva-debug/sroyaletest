@@ -215,19 +215,19 @@ export async function GET(req) {
       console.log(`[Cron Reminders] Skipping low stock check. lastCron: ${new Date(lastLowStockCron).toISOString()}, now: ${new Date(nowMs).toISOString()}`);
     }
 
-    // ── Recurring expenses (once per day) ──────────────────────────────────
+    // ── Recurring expenses + automatic payroll (once per day) ──────────────
     try {
       const lastRecurringCron = cfg.sparta_last_recurring_cron_at || 0;
       if (nowMs - lastRecurringCron >= oneDayMs) {
-        const { applyRecurringExpenses } = await import('@/lib/actions');
-        const result = await applyRecurringExpenses();
-        debug.recurring = result;
+        const { processDueTransactions } = await import('@/lib/actions');
+        const result = await processDueTransactions();
+        debug.automation = result;
         await supabase
           .from('settings')
           .upsert({ key: 'sparta_last_recurring_cron_at', value: JSON.stringify(nowMs) }, { onConflict: 'key' });
       }
     } catch (recurErr) {
-      debug.recurringError = String(recurErr?.message || recurErr);
+      debug.automationError = String(recurErr?.message || recurErr);
     }
 
     if (count > 0 || Object.keys(newNotified).length !== Object.keys(notified).length) {
