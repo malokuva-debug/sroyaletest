@@ -162,6 +162,19 @@ const C = {
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
+// Kosovo is on CET/CEST (same rules as Europe/Belgrade). Format the current
+// instant in that zone so "today" is always the studio's local day.
+const kosovoIso = (offsetDays = 0) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Belgrade",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(Date.now() + offsetDays * 864e5));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+};
+
 export default function BookingForm({ lang, salon, loading, preselect, onConsumed }: Props) {
   const c = C[lang];
 
@@ -317,8 +330,8 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
   }, [slots]);
 
   const noneFree = date && !slotsLoading && !dayClosed && Object.values(grouped).every(list => list.length === 0);
-  const todayIso = iso(new Date());
-  const tomorrowIso = iso(new Date(Date.now() + 864e5));
+  const todayIso = kosovoIso(0);
+  const tomorrowIso = kosovoIso(1);
 
   const reset = () => {
     setStep(0);

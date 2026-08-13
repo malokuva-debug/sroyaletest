@@ -505,6 +505,7 @@ export const translations = {
     javore: "Javore",
     vjetore: "Vjetore",
     dita_e_muajit: "Dita e muajit",
+    data_e_pageses: "Data e pagesës",
     next_due: "Pagesa e ardhshme",
     shpenzimet_u_gjeneruan: "U shtuan {} shpenzime",
 
@@ -1033,6 +1034,7 @@ export const translations = {
     javore: "Weekly",
     vjetore: "Yearly",
     dita_e_muajit: "Day of month",
+    data_e_pageses: "Payment date",
     next_due: "Next due",
     shpenzimet_u_gjeneruan: "Added {} expenses",
 

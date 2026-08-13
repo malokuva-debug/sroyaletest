@@ -56,7 +56,7 @@ export const toHHMM = (mins: number): string =>
 
 export function getKosovoNow(): { todayIso: string; minutesNow: number } {
   const formatter = new Intl.DateTimeFormat("en-ZA", {
-    timeZone: "Europe/Berlin",
+    timeZone: "Europe/Belgrade",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

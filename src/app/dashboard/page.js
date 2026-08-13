@@ -44,8 +44,8 @@ const KEYS = { theme: "sparta_theme", user: "sparta_user", lang: "sparta_lang" }
 
 const SESSION_DAYS = 30;
 
-// ── Kosovo timezone helpers (Europe/Berlin = UTC+1 winter, UTC+2 summer) ──
-const TZ = 'Europe/Berlin';
+// ── Kosovo timezone helpers (Europe/Belgrade = UTC+1 winter, UTC+2 summer) ──
+const TZ = 'Europe/Belgrade';
 
 function nowKS() {
   const now = new Date();
@@ -1547,7 +1547,7 @@ function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClie
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [period, setPeriod] = useState('monthly');
-  const [refDate, setRefDate] = useState(() => new Date());
+  const [refDate, setRefDate] = useState(() => nowKS());
   const [form, setForm] = useState({
     clientId: '', clientName: '', serviceId: '', serviceName: '',
     price: '', date: todayISO(), extras: [], notes: '',
@@ -2882,7 +2882,7 @@ function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategor
 ===================================================================== */
 function AnalitikaView({ teArdhurat, shpenzimet, appointments = [], clients = [], settings = {}, t, lang, fmtDate, rangeFor }) {
   const [period, setPeriod] = useState('monthly');
-  const [refDate, setRefDate] = useState(() => new Date());
+  const [refDate, setRefDate] = useState(() => nowKS());
   const [start, end, label] = rangeFor(period, refDate);
   const settingsLocal = settings;
 
@@ -2983,7 +2983,7 @@ function AnalitikaView({ teArdhurat, shpenzimet, appointments = [], clients = []
     <div className="space-y-3">
       <Card>
         <CardContent className="p-3 space-y-2">
-          <Tabs value={period} onValueChange={(v) => { setPeriod(v); setRefDate(new Date()); }}>
+          <Tabs value={period} onValueChange={(v) => { setPeriod(v); setRefDate(nowKS()); }}>
             <TabsList className="grid grid-cols-4 w-full h-9">
               <TabsTrigger value="daily" className="text-xs">{t('ditore')}</TabsTrigger>
               <TabsTrigger value="weekly" className="text-xs">{t('javor')}</TabsTrigger>
@@ -2999,7 +2999,7 @@ function AnalitikaView({ teArdhurat, shpenzimet, appointments = [], clients = []
             <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setRefDate(d => shiftPeriod(period, d, +1))}>
               <ChevronLeft className="w-4 h-4 rotate-180" />
             </Button>
-            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setRefDate(new Date())}>
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setRefDate(nowKS())}>
               {t('sot')}
             </Button>
           </div>
@@ -4026,7 +4026,7 @@ function RecurringExpensesCard({ items, onSave, onDelete, onApply, t, confirmAsy
       <FormDialog t={t}
         open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditing(null); }}
         title={editing ? t('modifiko_shpenzimin_periodik') : t('shto_shpenzim_periodik')}
-        initial={editing || { name: '', amount: '', frequency: 'monthly', dayOfMonth: 1 }}
+        initial={editing || { name: '', amount: '', frequency: 'monthly', dayOfMonth: 1, nextDueDate: '' }}
         fields={[
           { name: 'name', label: t('emri'), type: 'text', required: true },
           { name: 'amount', label: t('shuma'), type: 'number', step: '0.01', required: true },
@@ -4039,6 +4039,7 @@ function RecurringExpensesCard({ items, onSave, onDelete, onApply, t, confirmAsy
             ],
           },
           { name: 'dayOfMonth', label: t('dita_e_muajit'), type: 'number' },
+          { name: 'nextDueDate', label: t('data_e_pageses'), type: 'date' },
         ]}
         onSave={async (form) => {
           await onSave({ ...editing, ...form, amount: Number(form.amount || 0) });
@@ -4784,7 +4785,7 @@ const manualContent = {
 function ConfirmDialog({ open, onClose, message, confirmLabel, confirmTitle, cancelLabel }) {
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(false); }}>
-      <DialogContent className="sm:max-w-sm" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-sm" onInteractOutside={() => onClose(false)}>
         <DialogHeader>
           <DialogTitle className="text-base">{confirmTitle}</DialogTitle>
           <DialogDescription className="pt-1">{message}</DialogDescription>
@@ -5274,7 +5275,8 @@ function FormDialog({ open, onOpenChange, title, fields, initial, onSave, t }) {
                     setForm(next);
                   }}
                   placeholder={f.placeholder}
-                  rows={2}
+                  rows={1}
+                  className="h-11"
                 />
               ) : f.type === 'select' ? (
                 <Select value={form[f.name] ?? ''} onValueChange={(val) => {
