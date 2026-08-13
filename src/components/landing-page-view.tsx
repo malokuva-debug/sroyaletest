@@ -88,6 +88,7 @@ export default function LandingPageView({
   const [pick, setPick] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const catInit = useRef(false);
   const [salon, setSalon] = useState<SalonData | null>(null);
   const [loadingSalon, setLoadingSalon] = useState(true);
   const bookingRef = useRef<HTMLDivElement>(null);
@@ -112,6 +113,18 @@ export default function LandingPageView({
       alive = false;
     };
   }, []);
+
+  // Default the services filter to Manicure once the catalog loads.
+  useEffect(() => {
+    const cats = salon?.categories ?? [];
+    if (catInit.current || cats.length === 0) return;
+    catInit.current = true;
+    const manicure = cats.find((c) => /manicure|manikyr/i.test(c.name || ""));
+    if (manicure) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveCategory(manicure.id);
+    }
+  }, [salon?.categories]);
 
   useEffect(() => {
     const THRESHOLD = 80;
