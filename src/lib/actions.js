@@ -165,16 +165,24 @@ export async function createUser(userData) {
 export async function deleteUser(id) {
   // Clean up per-worker data before removing the user. Each step is guarded
   // so the delete still works on databases that haven't run the migration.
+  const guarded = (q) => {
+    try {
+      const p = q();
+      return (p && typeof p.then === 'function') ? p.catch(() => {}) : Promise.resolve();
+    } catch {
+      return Promise.resolve();
+    }
+  };
   const cleanup = [
-    supabase.from('worker_services').delete().eq('worker_id', id),
-    supabase.from('worker_additional_services').delete().eq('worker_id', id),
-    supabase.from('worker_settings').delete().eq('worker_id', id),
-    supabase.from('appointments').update({ worker_id: null }).eq('worker_id', id),
-    supabase.from('te_ardhurat').update({ worker_id: null }).eq('worker_id', id),
-    supabase.from('sessions').delete().eq('user_id', id),
-    supabase.from('push_subscriptions').delete().eq('user_id', id),
+    () => supabase.from('worker_services').delete().eq('worker_id', id),
+    () => supabase.from('worker_additional_services').delete().eq('worker_id', id),
+    () => supabase.from('worker_settings').delete().eq('worker_id', id),
+    () => supabase.from('appointments').update({ worker_id: null }).eq('worker_id', id),
+    () => supabase.from('te_ardhurat').update({ worker_id: null }).eq('worker_id', id),
+    () => supabase.from('sessions').delete().eq('user_id', id),
+    () => supabase.from('push_subscriptions').delete().eq('user_id', id),
   ];
-  await Promise.all(cleanup.map(p => p.catch(() => {})));
+  await Promise.all(cleanup.map(guarded));
 
   try {
     const sched = { ...(await getSetting('sparta_worker_schedule', {})) };
