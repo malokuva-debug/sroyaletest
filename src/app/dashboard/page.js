@@ -2489,6 +2489,15 @@ function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategor
   const [addonOpen, setAddonOpen] = useState(false);
   const [addonEditing, setAddonEditing] = useState(null);
   const [addonFilter, setAddonFilter] = useState('');
+  const [quickAdd, setQuickAdd] = useState({});
+
+  async function quickAddAddon(serviceId) {
+    const clean = (quickAdd[serviceId] || '').trim();
+    if (!clean) { toast.error(t('vendos_emrin_e_sherbimit')); return; }
+    await onSaveAdditionalService({ id: uuid(), name: clean, price: 0, active: true, serviceId: serviceId || null, _isNew: true });
+    toast.success(t('u_shtua'));
+    setQuickAdd(prev => ({ ...prev, [serviceId]: '' }));
+  }
 
   async function handleLocalSave(form) {
     const payload = {
@@ -2612,18 +2621,87 @@ function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategor
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground">{t('sherbimet_shtese_desc')}</p>
+          <Input
+            className="h-9 text-sm"
+            placeholder={t('kerko_sherbim_shtese')}
+            value={addonFilter}
+            onChange={(e) => setAddonFilter(e.target.value)}
+          />
           {additionalServices.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2 text-center">{t('asnje_sherbim_shtese')}</p>
           ) : (
             <div className="space-y-2">
               {items.map(svc => {
-                const addons = additionalServices.filter(a => a.serviceId === svc.id);
-                if (addons.length === 0) return null;
+                const addons = additionalServices.filter(a => a.serviceId === svc.id && (!addonFilter || (a.name || '').toLowerCase().includes(addonFilter.toLowerCase())));
+                if (addons.length === 0 && addonFilter) return null;
                 return (
                   <div key={svc.id}>
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{svc.name}</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground flex-1 truncate">{svc.name}</p>
+                      <div className="flex gap-1">
+                        <Input
+                          className="h-6 w-36 text-[11px] py-0"
+                          placeholder={t('shto_sherbim_shtese_quick')}
+                          value={quickAdd[svc.id] || ''}
+                          onChange={(e) => setQuickAdd(prev => ({ ...prev, [svc.id]: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); quickAddAddon(svc.id); } }}
+                        />
+                        <Button size="icon" variant="ghost" className="h-6 w-6" title={t('shto_sherbim_shtese')} onClick={() => quickAddAddon(svc.id)}>
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    {addons.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground">{t('asnje_sherbim_shtese')}</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {addons.map(a => (
+                          <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border text-sm">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${a.active !== false ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                              <span className={a.active === false ? 'line-through text-muted-foreground' : ''}>{a.name}</span>
+                              <span className="text-xs text-muted-foreground tabular-nums">{fmtMoney(a.price)}</span>
+                            </div>
+                            <div className="flex gap-1 shrink-0">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setAddonEditing(a); setAddonOpen(true); }}>
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" onClick={async () => {
+                                if (await confirmAsync(t('fshi_sherbimin_shtese'))) { onDeleteAdditionalService(a.id); toast.success(t('u_fshi')); }
+                              }}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {(() => {
+                const uncat = additionalServices.filter(a => a.serviceId === null && (!addonFilter || (a.name || '').toLowerCase().includes(addonFilter.toLowerCase())));
+                if (uncat.length === 0 && addonFilter) return null;
+                if (uncat.length === 0) return null;
+                return (
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground flex-1">{t('pa_kategori')}</p>
+                      <div className="flex gap-1">
+                        <Input
+                          className="h-6 w-36 text-[11px] py-0"
+                          placeholder={t('shto_sherbim_shtese_quick')}
+                          value={quickAdd.null || ''}
+                          onChange={(e) => setQuickAdd(prev => ({ ...prev, null: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); quickAddAddon(null); } }}
+                        />
+                        <Button size="icon" variant="ghost" className="h-6 w-6" title={t('shto_sherbim_shtese')} onClick={() => quickAddAddon(null)}>
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
                     <div className="space-y-1">
-                      {addons.map(a => (
+                      {uncat.map(a => (
                         <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border text-sm">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className={`w-2 h-2 rounded-full shrink-0 ${a.active !== false ? 'bg-emerald-500' : 'bg-slate-300'}`} />
@@ -2645,31 +2723,7 @@ function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategor
                     </div>
                   </div>
                 );
-              })}
-              {additionalServices.filter(a => a.serviceId === null).length > 0 && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{t('pa_kategori')}</p>
-                  {additionalServices.filter(a => a.serviceId === null).map(a => (
-                    <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border text-sm">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${a.active !== false ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                        <span className={a.active === false ? 'line-through text-muted-foreground' : ''}>{a.name}</span>
-                        <span className="text-xs text-muted-foreground tabular-nums">{fmtMoney(a.price)}</span>
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setAddonEditing(a); setAddonOpen(true); }}>
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" onClick={async () => {
-                          if (await confirmAsync(t('fshi_sherbimin_shtese'))) { onDeleteAdditionalService(a.id); toast.success(t('u_fshi')); }
-                        }}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              })()}
             </div>
           )}
         </CardContent>
