@@ -2534,6 +2534,24 @@ function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategor
     next.splice(to, 0, moved);
     setOrder(next);
     setDragId(null);
+    persistOrder(next);
+  }
+
+  // Touch (mobile) drag-and-drop: HTML5 drag events don't fire on iOS,
+  // so reorder live from touchmove and finish on touchend.
+  const touchDragRef = useRef(false);
+  function touchMoveTo(targetId) {
+    if (!touchDragRef.current || !dragId || !targetId || targetId === dragId) return;
+    const from = visible.findIndex(s => s.id === dragId);
+    const to = visible.findIndex(s => s.id === targetId);
+    if (from < 0 || to < 0) return;
+    const next = [...visible];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setOrder(next);
+    persistOrder(next);
+  }
+  function persistOrder(next) {
     next.forEach((s, i) => {
       if (s.position !== i) {
         onSave({ ...s, position: i, _isNew: false, categoryId: s.categoryId || null });
@@ -2557,9 +2575,28 @@ function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategor
               onDragOver={(e) => { if (dragId && dragId !== s.id) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
               onDrop={(e) => { e.preventDefault(); reorderByDrag(s.id); }}
               onDragEnd={() => setDragId(null)}
+              onTouchStart={(e) => {
+                if (e.target.closest('[data-drag-handle]')) {
+                  setDragId(s.id);
+                  touchDragRef.current = true;
+                  e.preventDefault();
+                }
+              }}
+              onTouchMove={(e) => {
+                if (!touchDragRef.current) return;
+                e.preventDefault();
+                const touch = e.touches[0];
+                const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                const targetLi = el?.closest('[data-svc-id]');
+                if (targetLi) touchMoveTo(targetLi.getAttribute('data-svc-id'));
+              }}
+              onTouchEnd={() => { touchDragRef.current = false; setDragId(null); }}
+              data-svc-id={s.id}
               className={`p-3 bg-card rounded-xl border flex items-center gap-3 cursor-grab active:cursor-grabbing ${dragId === s.id ? 'opacity-50 border-brand-400' : ''}`}
             >
-              <GripVertical className="w-4 h-4 text-muted-foreground/50 shrink-0" />
+              <span data-drag-handle className="touch-none">
+                <GripVertical className="w-4 h-4 text-muted-foreground/50 shrink-0" />
+              </span>
               <div className="w-10 h-10 rounded-lg bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center text-rose-600 dark:text-rose-300 shrink-0">
                 <Scissors className="w-5 h-5" />
               </div>
