@@ -4116,12 +4116,18 @@ function RecurringExpensesCard({ items, onSave, onDelete, onSync, t, confirmAsyn
     setSyncing(true);
     try {
       const res = await onSync();
-      toast.success(
-        t('sinkronizimi_u_perfundua')
-          .replace('{}', res?.recurringCreated ?? 0)
-          .replace('{}', res?.payrollCreated ?? 0)
-          .replace('{}', fmtMoney(res?.payrollAmount ?? 0))
-      );
+      const created = res?.recurringCreated ?? 0;
+      const payrollCreated = res?.payrollCreated ?? 0;
+      if (created === 0 && payrollCreated === 0) {
+        toast.info(t('sinkronizim_0'));
+      } else {
+        toast.success(
+          t('sinkronizimi_u_perfundua')
+            .replace('{}', created)
+            .replace('{}', payrollCreated)
+            .replace('{}', fmtMoney(res?.payrollAmount ?? 0))
+        );
+      }
     } catch (e) {
       console.error('processDueTransactions failed', e);
       toast.error(`${t('dështoi')}${e?.message || ''}`);

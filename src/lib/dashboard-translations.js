@@ -522,6 +522,7 @@ export const translations = {
     shpenzime_tjera: "Shpenzime të tjera",
     sinkronizo: "Sinkronizo tani",
     sinkronizimi_u_perfundua: "U shtuan {} shpenzime periodike, u gjeneruan {} lista page, paga totale: {}",
+    sinkronizim_0: "Asgjë e vonuar. Nëse dita e pagesës ka kaluar, shpenzimi/paga shtohet automatikisht; përndryshe shtohet në datën e ardhshme të pagesës.",
 
     // Payroll
     listapagat: "Listapagat",
@@ -1065,6 +1066,7 @@ export const translations = {
     shpenzime_tjera: "Other expenses",
     sinkronizo: "Run now",
     sinkronizimi_u_perfundua: "Added {} recurring expenses, generated {} payroll entries, total payroll: {}",
+    sinkronizim_0: "Nothing due. If the payment day already passed, the expense/payroll is added automatically; otherwise it is added on the next payment date.",
 
     // Payroll
     listapagat: "Payroll",

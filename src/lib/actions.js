@@ -1172,7 +1172,10 @@ function computeFirstDue(entry, todayIso) {
   if (entry.frequency === 'weekly') {
     const targetDow = entry.weekday != null ? Number(entry.weekday) : 1;
     const dow = today.getUTCDay();
-    const diff = (targetDow - dow + 7) % 7;
+    // Most recent occurrence on/before today (today if the target day IS today),
+    // so a first run catches up the current week's missed payment.
+    let diff = (targetDow - dow + 7) % 7;
+    if (diff !== 0) diff -= 7;
     const d = new Date(Date.UTC(y, m - 1, today.getUTCDate() + diff));
     return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
   }
@@ -1183,14 +1186,9 @@ function computeFirstDue(entry, todayIso) {
     if (cand < todayIso) cand = `${y + 1}-${pad2(month)}-${pad2(Math.min(day, new Date(Date.UTC(y + 1, month, 0)).getUTCDate()))}`;
     return cand;
   }
-  let cand = `${y}-${pad2(m)}-${pad2(Math.min(day, new Date(Date.UTC(y, m, 0)).getUTCDate()))}`;
-  if (cand < todayIso) {
-    const next = new Date(Date.UTC(y, m, 1));
-    const ny = next.getUTCFullYear();
-    const nm = next.getUTCMonth() + 1;
-    cand = `${ny}-${pad2(nm)}-${pad2(Math.min(day, new Date(Date.UTC(ny, nm, 0)).getUTCDate()))}`;
-  }
-  return cand;
+  // Monthly: this month's configured day (clamped), even if already passed —
+  // the apply loop catches up the missed occurrence and advances.
+  return `${y}-${pad2(m)}-${pad2(Math.min(day, new Date(Date.UTC(y, m, 0)).getUTCDate()))}`;
 }
 
 function computeNextDue(entry, fromIso) {
@@ -1300,6 +1298,11 @@ export async function saveRecurringExpense(data) {
     lastGeneratedAt: data.lastGeneratedAt || null,
   };
   const isNew = data._isNew !== undefined ? data._isNew : !data.id;
+  if (!row.nextDueDate && row.active !== false) {
+    // Seed the schedule so "Pagesa e ardhshme" shows right away and the
+    // automation has an anchor to advance from.
+    row.nextDueDate = computeFirstDue(row, getTodayKS());
+  }
   if (!isNew) {
     await supabase.from('recurring_expenses').update(toSnake(row)).eq('id', row.id);
   } else {
@@ -1332,8 +1335,9 @@ function computeInitialPayrollDate(worker, todayIso) {
   if (freq === 'weekly') {
     const targetDow = ((day % 7) + 7) % 7;
     const dow = today.getUTCDay();
-    const diff = (targetDow - dow + 7) % 7;
-    return addDays(todayIso, diff);
+    if (targetDow === dow) return todayIso;
+    if (targetDow > dow) return addDays(todayIso, targetDow - dow);
+    return todayIso; // pay day already passed this week → catch up today
   }
   if (freq === 'yearly') {
     const month = worker.payrollMonth != null ? Number(worker.payrollMonth) : 1;
@@ -1341,13 +1345,11 @@ function computeInitialPayrollDate(worker, todayIso) {
     if (cand < todayIso) cand = `${y + 1}-${pad2(month)}-${pad2(Math.min(day, new Date(Date.UTC(y + 1, month, 0)).getUTCDate()))}`;
     return cand;
   }
-  let cand = `${y}-${pad2(m)}-${pad2(Math.min(day, new Date(Date.UTC(y, m, 0)).getUTCDate()))}`;
-  if (cand < todayIso) {
-    const next = new Date(Date.UTC(y, m, 1));
-    const ny = next.getUTCFullYear();
-    const nm = next.getUTCMonth() + 1;
-    cand = `${ny}-${pad2(nm)}-${pad2(Math.min(day, new Date(Date.UTC(ny, nm, 0)).getUTCDate()))}`;
-  }
+  // Monthly: if the configured day already passed this month, the first pay is
+  // due today (window ends today → catches up current revenue). Otherwise it
+  // lands on the configured day.
+  const cand = `${y}-${pad2(m)}-${pad2(Math.min(day, new Date(Date.UTC(y, m, 0)).getUTCDate()))}`;
+  if (cand < todayIso) return todayIso;
   return cand;
 }
 
