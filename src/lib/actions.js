@@ -169,8 +169,10 @@ export async function deleteUser(id) {
     supabase.from('worker_services').delete().eq('worker_id', id),
     supabase.from('worker_additional_services').delete().eq('worker_id', id),
     supabase.from('worker_settings').delete().eq('worker_id', id),
-    supabase.from('appointments').update({ worker_id: null }).eq('worker_id', id).in('status', ['pending', 'canceled']),
+    supabase.from('appointments').update({ worker_id: null }).eq('worker_id', id),
     supabase.from('te_ardhurat').update({ worker_id: null }).eq('worker_id', id),
+    supabase.from('sessions').delete().eq('user_id', id),
+    supabase.from('push_subscriptions').delete().eq('user_id', id),
   ];
   await Promise.all(cleanup.map(p => p.catch(() => {})));
 
@@ -188,7 +190,10 @@ export async function deleteUser(id) {
   } catch {}
 
   const result = await supabase.from('users').delete().eq('id', id);
-  if (result.error) throw result.error;
+  if (result.error) {
+    console.error('[deleteUser]', result.error);
+    throw new Error(result.error.message || result.error.details || 'delete failed');
+  }
   revalidatePath('/dashboard');
   return { ok: true };
 }

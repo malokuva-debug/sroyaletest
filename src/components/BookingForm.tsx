@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Check,
   Loader2,
@@ -168,6 +168,7 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
   const [step, setStep] = useState(0);
   const [serviceId, setServiceId] = useState("");
   const [activeCategory, setActiveCategory] = useState("");
+  const catInit = useRef(false);
   const [workerId, setWorkerId] = useState("any");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -249,6 +250,20 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preselect, services.length]);
+
+  // Default the category filter to Manicure once the catalog loads.
+  useEffect(() => {
+    if (catInit.current || categories.length === 0) return;
+    catInit.current = true;
+    const manicure = categories.find((c) =>
+      /manicure|manikyr/i.test(c.name || "")
+    );
+    if (manicure) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveCategory(manicure.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories.length]);
 
   const days = useMemo(() => {
     const out: { iso: string; d: Date; closed: boolean }[] = [];

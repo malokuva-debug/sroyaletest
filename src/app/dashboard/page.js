@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Toaster, toast } from 'sonner';
 import Link from 'next/link';
 import {
@@ -3003,7 +3003,8 @@ function AnalitikaView({ teArdhurat, shpenzimet, appointments = [], clients = []
 function WorkerManagement({ workers, setWorkers, services = [], categories = [], additionalServices = [], workerServices = [], workerAdditionalServices = [], workerSettings = [], setWorkerServicesState, setWorkerAdditionalServicesState, setWorkerSettingsState, confirmAsync, t }) {
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState(null);
-  const [expanded, setExpanded] = useState(null);
+  const [settingsWorker, setSettingsWorker] = useState(null);
+  const [settingsTab, setSettingsTab] = useState('services');
   const [salaryForm, setSalaryForm] = useState({});
   const [serviceSel, setServiceSel] = useState({});
   const [addonSel, setAddonSel] = useState({});
@@ -3033,16 +3034,13 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
     toast.success(t('punëtori_u_ruajt'));
   }
 
-  function toggleExpand(w) {
-    if (expanded === w.id) {
-      setExpanded(null);
-      return;
-    }
-    setExpanded(w.id);
+  function openSettings(w) {
     const ws = workerSettings.find(x => x.workerId === w.id);
     setSalaryForm(prev => ({ ...prev, [w.id]: ws?.salaryPercent ?? '' }));
     setServiceSel(prev => ({ ...prev, [w.id]: new Set(services.map(s => s.id)) }));
     setAddonSel(prev => ({ ...prev, [w.id]: new Set(additionalServices.filter(a => a.active !== false).map(a => a.id)) }));
+    setSettingsTab('services');
+    setSettingsWorker(w);
   }
 
   function toggleAllService(w, ids, on) {
@@ -3133,7 +3131,7 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
                         <Check className="w-3.5 h-3.5" />
                       </Button>
                     )}
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => toggleExpand(w)}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" title={t('cilësimet_punetorit')} onClick={() => openSettings(w)}>
                       <SettingsIcon className="w-3.5 h-3.5" />
                     </Button>
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setCurrent(w); setOpen(true); }}>
@@ -3145,8 +3143,9 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
                           await deleteUser(w.id);
                           setWorkers(workers.filter(x => x.id !== w.id));
                           toast.success(t('u_fshi'));
-                        } catch {
-                          toast.error(t('dështoi'));
+                        } catch (e) {
+                          console.error('deleteUser failed', e);
+                          toast.error(`${t('dështoi')}${e?.message || ''}`);
                         }
                       }
                     }}>
@@ -3154,155 +3153,6 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
                     </Button>
                   </div>
                 </div>
-
-                {expanded === w.id && (
-                  <div className="mt-3 pt-3 border-t space-y-3">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-medium">{t('sherbimet_e_punetorit')}</p>
-                        <div className="flex gap-1">
-                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t('zgjidh_te_gjitha')} onClick={() => toggleAllService(w, services.map(s => s.id), true)}>
-                            <Check className="w-3 h-3" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t('zgjidh_asnje')} onClick={() => toggleAllService(w, services.map(s => s.id), false)}>
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      {services.length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground">{t('asnje_sherbim')}</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {categories.map(cat => {
-                            const catServices = services.filter(s => s.categoryId === cat.id);
-                            if (catServices.length === 0) return null;
-                            const allOn = catServices.every(s => serviceSel[w.id]?.has(s.id));
-                            const someOn = catServices.some(s => serviceSel[w.id]?.has(s.id));
-                            return (
-                              <div key={cat.id}>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{cat.name}</span>
-                                  <Button size="icon" variant="ghost" className="h-5 w-5" title={allOn ? t('zgjidh_asnje') : t('zgjidh_te_gjitha')}
-                                    onClick={() => toggleAllService(w, catServices.map(s => s.id), !allOn)}>
-                                    {allOn ? <X className="w-2.5 h-2.5" /> : <Check className="w-2.5 h-2.5" />}
-                                  </Button>
-                                </div>
-                                <div className="grid grid-cols-2 gap-1.5 mt-1">
-                                  {catServices.map(s => {
-                                    const on = serviceSel[w.id]?.has(s.id);
-                                    return (
-                                      <button key={s.id} type="button"
-                                        onClick={() => setServiceSel(prev => {
-                                          const set = new Set(prev[w.id] || []);
-                                          if (set.has(s.id)) set.delete(s.id); else set.add(s.id);
-                                          return { ...prev, [w.id]: set };
-                                        })}
-                                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] transition-all ${
-                                          on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
-                                        }`}>
-                                        <span className="truncate">{s.name}</span>
-                                        {on && <Check className="w-3 h-3 shrink-0 ml-1" />}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {(() => {
-                            const uncat = services.filter(s => !s.categoryId);
-                            if (uncat.length === 0) return null;
-                            const allOn = uncat.every(s => serviceSel[w.id]?.has(s.id));
-                            return (
-                              <div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('pa_kategori')}</span>
-                                  <Button size="icon" variant="ghost" className="h-5 w-5" title={allOn ? t('zgjidh_asnje') : t('zgjidh_te_gjitha')}
-                                    onClick={() => toggleAllService(w, uncat.map(s => s.id), !allOn)}>
-                                    {allOn ? <X className="w-2.5 h-2.5" /> : <Check className="w-2.5 h-2.5" />}
-                                  </Button>
-                                </div>
-                                <div className="grid grid-cols-2 gap-1.5 mt-1">
-                                  {uncat.map(s => {
-                                    const on = serviceSel[w.id]?.has(s.id);
-                                    return (
-                                      <button key={s.id} type="button"
-                                        onClick={() => setServiceSel(prev => {
-                                          const set = new Set(prev[w.id] || []);
-                                          if (set.has(s.id)) set.delete(s.id); else set.add(s.id);
-                                          return { ...prev, [w.id]: set };
-                                        })}
-                                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] transition-all ${
-                                          on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
-                                        }`}>
-                                        <span className="truncate">{s.name}</span>
-                                        {on && <Check className="w-3 h-3 shrink-0 ml-1" />}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
-                      <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={() => saveWorkerServicesFor(w)}>
-                        <Save className="w-3 h-3 mr-1" /> {t('ruaj_sherbimet')}
-                      </Button>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-medium">{t('sherbimet_shtese_te_punetorit')}</p>
-                        <div className="flex gap-1">
-                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t('zgjidh_te_gjitha')} onClick={() => toggleAllAddon(w, additionalServices.filter(a => a.active !== false).map(a => a.id), true)}>
-                            <Check className="w-3 h-3" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t('zgjidh_asnje')} onClick={() => toggleAllAddon(w, additionalServices.filter(a => a.active !== false).map(a => a.id), false)}>
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      {additionalServices.filter(a => a.active !== false).length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground">{t('asnje_sherbim_shtese')}</p>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {additionalServices.filter(a => a.active !== false).map(a => {
-                            const on = addonSel[w.id]?.has(a.id);
-                            return (
-                              <button key={a.id} type="button"
-                                onClick={() => setAddonSel(prev => {
-                                  const set = new Set(prev[w.id] || []);
-                                  if (set.has(a.id)) set.delete(a.id); else set.add(a.id);
-                                  return { ...prev, [w.id]: set };
-                                })}
-                                className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] transition-all ${
-                                  on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
-                                }`}>
-                                <span className="truncate">{a.name}</span>
-                                {on && <Check className="w-3 h-3 shrink-0 ml-1" />}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                      <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={() => saveWorkerAdditionalServicesFor(w)}>
-                        <Save className="w-3 h-3 mr-1" /> {t('ruaj_sherbimet')}
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs shrink-0">{t('perqindja_e_pages')}</Label>
-                      <Input type="number" min="0" max="100" className="h-8 w-20 text-center text-xs"
-                        value={salaryForm[w.id] ?? ''}
-                        placeholder="%"
-                        onChange={(e) => setSalaryForm(prev => ({ ...prev, [w.id]: e.target.value }))} />
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => saveSalaryFor(w)}>
-                        <Save className="w-3 h-3 mr-1" /> {t('ruaj')}
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </li>
             ))}
           </ul>
@@ -3336,6 +3186,171 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
         initial={current}
         onSave={handleSave}
       />
+
+      <Dialog open={!!settingsWorker} onOpenChange={(v) => { if (!v) setSettingsWorker(null); }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <SettingsIcon className="w-4 h-4" /> {t('cilësimet_punetorit')}
+            </DialogTitle>
+            <DialogDescription>{settingsWorker?.name || settingsWorker?.username} — {t('cilësimet_punetorit_desc')}</DialogDescription>
+          </DialogHeader>
+
+          {settingsWorker && (
+            <Tabs value={settingsTab} onValueChange={setSettingsTab}>
+              <TabsList className="grid grid-cols-3 w-full h-9">
+                <TabsTrigger className="text-xs px-1" value="services">{t('sherbimet')}</TabsTrigger>
+                <TabsTrigger className="text-xs px-1" value="addons">{t('sherbime_shtese')}</TabsTrigger>
+                <TabsTrigger className="text-xs px-1" value="salary">{t('paga')}</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="services" className="mt-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium">{t('sherbimet_e_punetorit')}</p>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => toggleAllService(settingsWorker, services.map(s => s.id), true)}>
+                      <Check className="w-3 h-3 mr-1" /> {t('zgjidh_te_gjitha')}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => toggleAllService(settingsWorker, services.map(s => s.id), false)}>
+                      <X className="w-3 h-3 mr-1" /> {t('zgjidh_asnje')}
+                    </Button>
+                  </div>
+                </div>
+                {services.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">{t('asnje_sherbim')}</p>
+                ) : (
+                  <div className="space-y-3 max-h-[45vh] overflow-y-auto pr-1">
+                    {categories.map(cat => {
+                      const catServices = services.filter(s => s.categoryId === cat.id);
+                      if (catServices.length === 0) return null;
+                      const allOn = catServices.every(s => serviceSel[settingsWorker.id]?.has(s.id));
+                      return (
+                        <div key={cat.id}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{cat.name}</span>
+                            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => toggleAllService(settingsWorker, catServices.map(s => s.id), !allOn)}>
+                              {allOn ? t('zgjidh_asnje') : t('zgjidh_te_gjitha')}
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 mt-1">
+                            {catServices.map(s => {
+                              const on = serviceSel[settingsWorker.id]?.has(s.id);
+                              return (
+                                <button key={s.id} type="button"
+                                  onClick={() => setServiceSel(prev => {
+                                    const set = new Set(prev[settingsWorker.id] || []);
+                                    if (set.has(s.id)) set.delete(s.id); else set.add(s.id);
+                                    return { ...prev, [settingsWorker.id]: set };
+                                  })}
+                                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] transition-all ${
+                                    on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
+                                  }`}>
+                                  <span className="truncate">{s.name}</span>
+                                  {on && <Check className="w-3 h-3 shrink-0 ml-1" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(() => {
+                      const uncat = services.filter(s => !s.categoryId);
+                      if (uncat.length === 0) return null;
+                      const allOn = uncat.every(s => serviceSel[settingsWorker.id]?.has(s.id));
+                      return (
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('pa_kategori')}</span>
+                            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => toggleAllService(settingsWorker, uncat.map(s => s.id), !allOn)}>
+                              {allOn ? t('zgjidh_asnje') : t('zgjidh_te_gjitha')}
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 mt-1">
+                            {uncat.map(s => {
+                              const on = serviceSel[settingsWorker.id]?.has(s.id);
+                              return (
+                                <button key={s.id} type="button"
+                                  onClick={() => setServiceSel(prev => {
+                                    const set = new Set(prev[settingsWorker.id] || []);
+                                    if (set.has(s.id)) set.delete(s.id); else set.add(s.id);
+                                    return { ...prev, [settingsWorker.id]: set };
+                                  })}
+                                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] transition-all ${
+                                    on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
+                                  }`}>
+                                  <span className="truncate">{s.name}</span>
+                                  {on && <Check className="w-3 h-3 shrink-0 ml-1" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+                <Button size="sm" variant="outline" className="w-full h-9 text-xs" onClick={() => saveWorkerServicesFor(settingsWorker)}>
+                  <Save className="w-3.5 h-3.5 mr-1" /> {t('ruaj_sherbimet')}
+                </Button>
+              </TabsContent>
+
+              <TabsContent value="addons" className="mt-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium">{t('sherbimet_shtese_te_punetorit')}</p>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => toggleAllAddon(settingsWorker, additionalServices.filter(a => a.active !== false).map(a => a.id), true)}>
+                      <Check className="w-3 h-3 mr-1" /> {t('zgjidh_te_gjitha')}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => toggleAllAddon(settingsWorker, additionalServices.filter(a => a.active !== false).map(a => a.id), false)}>
+                      <X className="w-3 h-3 mr-1" /> {t('zgjidh_asnje')}
+                    </Button>
+                  </div>
+                </div>
+                {additionalServices.filter(a => a.active !== false).length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">{t('asnje_sherbim_shtese')}</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5 max-h-[45vh] overflow-y-auto pr-1">
+                    {additionalServices.filter(a => a.active !== false).map(a => {
+                      const on = addonSel[settingsWorker.id]?.has(a.id);
+                      return (
+                        <button key={a.id} type="button"
+                          onClick={() => setAddonSel(prev => {
+                            const set = new Set(prev[settingsWorker.id] || []);
+                            if (set.has(a.id)) set.delete(a.id); else set.add(a.id);
+                            return { ...prev, [settingsWorker.id]: set };
+                          })}
+                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] transition-all ${
+                            on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
+                          }`}>
+                          <span className="truncate">{a.name}</span>
+                          {on && <Check className="w-3 h-3 shrink-0 ml-1" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <Button size="sm" variant="outline" className="w-full h-9 text-xs" onClick={() => saveWorkerAdditionalServicesFor(settingsWorker)}>
+                  <Save className="w-3.5 h-3.5 mr-1" /> {t('ruaj_sherbimet')}
+                </Button>
+              </TabsContent>
+
+              <TabsContent value="salary" className="mt-4">
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs shrink-0">{t('perqindja_e_pages')}</Label>
+                  <Input type="number" min="0" max="100" className="h-9 w-24 text-center text-sm"
+                    value={salaryForm[settingsWorker.id] ?? ''}
+                    placeholder="%"
+                    onChange={(e) => setSalaryForm(prev => ({ ...prev, [settingsWorker.id]: e.target.value }))} />
+                  <Button size="sm" variant="outline" className="h-9 text-xs" onClick={() => saveSalaryFor(settingsWorker)}>
+                    <Save className="w-3.5 h-3.5 mr-1" /> {t('ruaj')}
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
