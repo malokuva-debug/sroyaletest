@@ -1092,7 +1092,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-rose-50 via-white to-rose-50 dark:from-zinc-950 dark:via-zinc-950 dark:to-black pb-24">
-      <Toaster richColors position="top-center" />
+      <Toaster richColors position="top-center" offset={{ top: "calc(env(safe-area-inset-top) + 12px)" }} />
 
       <header className="sticky top-0 z-30 bg-gradient-to-b from-brand-700 to-brand-800 dark:from-brand-800 dark:to-brand-900 text-gold-100 shadow-lg border-b border-gold-300/20">
         <div className="max-w-screen-md mx-auto px-4 pt-[env(safe-area-inset-top)]">
