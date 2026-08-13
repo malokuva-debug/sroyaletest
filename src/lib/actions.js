@@ -1014,6 +1014,7 @@ export async function saveWorkerSettings(workerId, settings) {
     await supabase.from('worker_settings').insert(row);
   }
   revalidatePath('/dashboard');
+  return toCamel(row);
 }
 
 // ─── Additional services catalog ────────────────────────────────────────────
@@ -1171,8 +1172,7 @@ function computeFirstDue(entry, todayIso) {
   if (entry.frequency === 'weekly') {
     const targetDow = entry.weekday != null ? Number(entry.weekday) : 1;
     const dow = today.getUTCDay();
-    let diff = (targetDow - dow + 7) % 7;
-    if (diff === 0) diff = 7;
+    const diff = (targetDow - dow + 7) % 7;
     const d = new Date(Date.UTC(y, m - 1, today.getUTCDate() + diff));
     return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
   }
@@ -1180,11 +1180,11 @@ function computeFirstDue(entry, todayIso) {
   if (entry.frequency === 'yearly') {
     const month = entry.month != null ? Number(entry.month) : 1;
     let cand = `${y}-${pad2(month)}-${pad2(Math.min(day, new Date(Date.UTC(y, month, 0)).getUTCDate()))}`;
-    if (cand <= todayIso) cand = `${y + 1}-${pad2(month)}-${pad2(Math.min(day, new Date(Date.UTC(y + 1, month, 0)).getUTCDate()))}`;
+    if (cand < todayIso) cand = `${y + 1}-${pad2(month)}-${pad2(Math.min(day, new Date(Date.UTC(y + 1, month, 0)).getUTCDate()))}`;
     return cand;
   }
   let cand = `${y}-${pad2(m)}-${pad2(Math.min(day, new Date(Date.UTC(y, m, 0)).getUTCDate()))}`;
-  if (cand <= todayIso) {
+  if (cand < todayIso) {
     const next = new Date(Date.UTC(y, m, 1));
     const ny = next.getUTCFullYear();
     const nm = next.getUTCMonth() + 1;
@@ -1332,18 +1332,17 @@ function computeInitialPayrollDate(worker, todayIso) {
   if (freq === 'weekly') {
     const targetDow = ((day % 7) + 7) % 7;
     const dow = today.getUTCDay();
-    let diff = (targetDow - dow + 7) % 7;
-    if (diff === 0) diff = 7;
+    const diff = (targetDow - dow + 7) % 7;
     return addDays(todayIso, diff);
   }
   if (freq === 'yearly') {
     const month = worker.payrollMonth != null ? Number(worker.payrollMonth) : 1;
     let cand = `${y}-${pad2(month)}-${pad2(Math.min(day, new Date(Date.UTC(y, month, 0)).getUTCDate()))}`;
-    if (cand <= todayIso) cand = `${y + 1}-${pad2(month)}-${pad2(Math.min(day, new Date(Date.UTC(y + 1, month, 0)).getUTCDate()))}`;
+    if (cand < todayIso) cand = `${y + 1}-${pad2(month)}-${pad2(Math.min(day, new Date(Date.UTC(y + 1, month, 0)).getUTCDate()))}`;
     return cand;
   }
   let cand = `${y}-${pad2(m)}-${pad2(Math.min(day, new Date(Date.UTC(y, m, 0)).getUTCDate()))}`;
-  if (cand <= todayIso) {
+  if (cand < todayIso) {
     const next = new Date(Date.UTC(y, m, 1));
     const ny = next.getUTCFullYear();
     const nm = next.getUTCMonth() + 1;

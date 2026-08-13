@@ -3247,12 +3247,24 @@ function WorkerManagement({ workers, setWorkers, services = [], categories = [],
       payrollStartDate: form.payrollStartDate || undefined,
       nextPayrollDate: form.nextPayrollDate || undefined,
     };
-    await saveWorkerSettings(w.id, payload);
-    setWorkerSettingsState?.(prev => {
-      const existing = prev.find(x => x.workerId === w.id) || { workerId: w.id };
-      return [...prev.filter(x => x.workerId !== w.id), { ...existing, ...payload }];
-    });
-    toast.success(t('paga_u_ruajt'));
+    try {
+      const res = await saveWorkerSettings(w.id, payload);
+      setWorkerSettingsState?.(prev => {
+        const existing = prev.find(x => x.workerId === w.id) || { workerId: w.id };
+        return [...prev.filter(x => x.workerId !== w.id), {
+          ...existing,
+          ...payload,
+          nextPayrollDate: res?.nextPayrollDate ?? existing.nextPayrollDate,
+        }];
+      });
+      setPayrollForm(prev => ({ ...prev, [w.id]: { ...prev[w.id], nextPayrollDate: res?.nextPayrollDate || '' } }));
+      toast.success(res?.nextPayrollDate
+        ? `${t('paga_u_ruajt')} — ${t('next_payroll')}: ${res.nextPayrollDate}`
+        : t('paga_u_ruajt'));
+    } catch (e) {
+      console.error('saveWorkerSettings failed', e);
+      toast.error(`${t('dështoi')}${e?.message || ''}`);
+    }
   }
 
   const payrollWeekdayOptions = [
@@ -4108,7 +4120,11 @@ function RecurringExpensesCard({ items, onSave, onDelete, onSync, t, confirmAsyn
         t('sinkronizimi_u_perfundua')
           .replace('{}', res?.recurringCreated ?? 0)
           .replace('{}', res?.payrollCreated ?? 0)
+          .replace('{}', fmtMoney(res?.payrollAmount ?? 0))
       );
+    } catch (e) {
+      console.error('processDueTransactions failed', e);
+      toast.error(`${t('dështoi')}${e?.message || ''}`);
     } finally {
       setSyncing(false);
     }
@@ -4245,7 +4261,9 @@ function PayrollCard({ payroll = [], onDelete, confirmAsync, t }) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  const rows = payroll.filter(p => p.period === period).sort((a, b) => (a.workerName || '').localeCompare(b.workerName || ''));
+  const rows = payroll
+    .filter(p => ((p.periodEnd || p.period || '').slice(0, 7)) === period)
+    .sort((a, b) => (a.workerName || '').localeCompare(b.workerName || ''));
   const totalPay = rows.reduce((s, r) => s + Number(r.salaryAmount || 0), 0);
 
   return (

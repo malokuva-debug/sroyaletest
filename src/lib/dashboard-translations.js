@@ -521,7 +521,7 @@ export const translations = {
     paga: "Paga",
     shpenzime_tjera: "Shpenzime të tjera",
     sinkronizo: "Sinkronizo tani",
-    sinkronizimi_u_perfundua: "U shtuan {} shpenzime periodike, u gjeneruan {} lista page",
+    sinkronizimi_u_perfundua: "U shtuan {} shpenzime periodike, u gjeneruan {} lista page, paga totale: {}",
 
     // Payroll
     listapagat: "Listapagat",
@@ -1064,7 +1064,7 @@ export const translations = {
     paga: "Salary",
     shpenzime_tjera: "Other expenses",
     sinkronizo: "Run now",
-    sinkronizimi_u_perfundua: "Added {} recurring expenses, generated {} payroll entries",
+    sinkronizimi_u_perfundua: "Added {} recurring expenses, generated {} payroll entries, total payroll: {}",
 
     // Payroll
     listapagat: "Payroll",
