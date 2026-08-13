@@ -40,12 +40,15 @@ interface Props {
 
 const C = {
   sq: {
-    steps: ["Shërbimi", "Data & Ora", "Kontakti"],
+    steps: ["Shërbimi", "Shërbime shtesë", "Data & Ora", "Kontakti"],
     step: "Hapi",
     of: "nga",
     s1: "Cilin shërbim dëshironi?",
     s1h: "Çmimet, kohëzgjatja dhe shërbimi më i zgjedhur lexohen nga sistemi i sallonit.",
     mostBooked: "Më i zgjedhur",
+    addonsTitle: "Dëshironi ndonjë shërbim shtesë?",
+    addonsHint: "Shërbimet shtesë varen nga shërbimi i zgjedhur. Mund t'i kaloni edhe pa to.",
+    noAddons: "Ky shërbim nuk ka shërbime shtesë.",
     s2: "Kur ju përshtatet?",
     s2h: "Oraret llogariten nga ditët e punës, orari i stafit dhe takimet ekzistuese.",
     s3: "Të dhënat e klientit",
@@ -96,12 +99,15 @@ const C = {
     locale: "sq-AL",
   },
   en: {
-    steps: ["Service", "Date & Time", "Contact"],
+    steps: ["Service", "Add-ons", "Date & Time", "Contact"],
     step: "Step",
     of: "of",
     s1: "Which service would you like?",
     s1h: "Prices, duration and the most-booked service come from the salon system.",
     mostBooked: "Most booked",
+    addonsTitle: "Any add-on services?",
+    addonsHint: "Add-ons depend on the service you chose. You can skip them.",
+    noAddons: "This service has no add-ons.",
     s2: "When suits you?",
     s2h: "Times are calculated from working days, staff schedules and existing appointments.",
     s3: "Client details",
@@ -188,7 +194,7 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
   const horizon = salon?.config.horizonDays ?? 30;
   const hours = salon?.config.hours ?? {};
 
-  const availableExtras = additionalServices.filter((x) => x.active !== false);
+  const availableExtras = additionalServices.filter((x) => x.active !== false && x.serviceId === serviceId);
 
   // Workers allowed to perform the selected service (worker_services). When no
   // assignments are configured at all, every worker can do every service.
@@ -201,15 +207,33 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
       .map((r) => r.workerId);
     return new Set(ids);
   }, [serviceId, salon?.workerServices]);
+
+  // Workers allowed to perform every chosen add-on (worker_additional_services).
+  // When no assignments are configured, every worker can do every add-on.
+  const extraCapableWorkerIds = useMemo(() => {
+    const wa = salon?.workerAdditionalServices ?? [];
+    if (wa.length === 0 || extras.length === 0) return null;
+    const extraIds = new Set(extras.map((e) => e.id));
+    const ids = wa
+      .filter((r) => extraIds.has(r.additionalServiceId))
+      .map((r) => r.workerId);
+    const count = ids.reduce((m, id) => (m.set(id, (m.get(id) || 0) + 1), m), new Map<string, number>());
+    return new Set([...count.entries()].filter(([, n]) => n === extraIds.size).map(([id]) => id));
+  }, [extras, salon?.workerAdditionalServices]);
+
   const pickableWorkers = useMemo(() => {
     const ws = salon?.workers ?? [];
-    if (!capableWorkerIds) return ws;
-    return ws.filter((w) => capableWorkerIds.has(w.id));
-  }, [capableWorkerIds, salon?.workers]);
+    const base = capableWorkerIds ? ws.filter((w) => capableWorkerIds.has(w.id)) : ws;
+    if (!extraCapableWorkerIds) return base;
+    return base.filter((w) => extraCapableWorkerIds.has(w.id));
+  }, [capableWorkerIds, extraCapableWorkerIds, salon?.workers]);
 
-  // Never keep a chosen worker that isn't assigned to the selected service.
+  // Never keep a chosen worker that isn't assigned to the selected service
+  // or to every chosen add-on.
   const activeWorkerId =
-    capableWorkerIds !== null && workerId !== "any" && !capableWorkerIds.has(workerId)
+    workerId !== "any" &&
+    ((capableWorkerIds !== null && !capableWorkerIds.has(workerId)) ||
+      (extraCapableWorkerIds !== null && !extraCapableWorkerIds.has(workerId)))
       ? "any"
       : workerId;
 
@@ -240,12 +264,12 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
 
   const service = services.find((s) => s.id === serviceId);
 
-  const load = useCallback(async (dt: string, svc: string, wk: string) => {
+  const load = useCallback(async (dt: string, svc: string, wk: string, extraIds: string[]) => {
     setSlotsLoading(true);
     try {
-      const r = await fetch(
-        `/api/availability?date=${dt}&serviceId=${encodeURIComponent(svc)}&workerId=${wk}`
-      );
+      const params = new URLSearchParams({ date: dt, serviceId: encodeURIComponent(svc), workerId: wk });
+      extraIds.forEach((id) => params.append("extraId", id));
+      const r = await fetch(`/api/availability?${params.toString()}`);
       const d = await r.json();
       setSlots(Array.isArray(d.slots) ? d.slots : []);
       setDayWorkers(Array.isArray(d.workers) ? d.workers : []);
@@ -261,9 +285,9 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
   useEffect(() => {
     if (date && serviceId) {
       setTime("");
-      load(date, serviceId, activeWorkerId);
+      load(date, serviceId, activeWorkerId, extras.map((e) => e.id));
     }
-  }, [date, serviceId, activeWorkerId, load]);
+  }, [date, serviceId, activeWorkerId, extras, load]);
 
   const grouped = useMemo(() => {
     const g = { morning: [] as SlotInfo[], afternoon: [] as SlotInfo[], evening: [] as SlotInfo[] };
@@ -482,6 +506,7 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
                     type="button"
                     onClick={() => {
                       setServiceId(s.id);
+                      setExtras([]);
                       setTimeout(() => setStep(1), 150);
                     }}
                     className={`relative text-left p-4 rounded-2xl border transition-all duration-200 active:scale-[0.99] ${
@@ -529,6 +554,50 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
       )}
 
       {step === 1 && (
+        <div className="animate-in">
+          <h3 className="text-lg font-bold text-slate-800 mb-1">{c.addonsTitle}</h3>
+          <p className="text-sm text-slate-400 mb-5">{c.addonsHint}</p>
+
+          {availableExtras.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-12 text-center">
+              <Sparkles className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-400">{c.noAddons}</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {availableExtras.map((e) => {
+                const on = extras.some((x) => x.id === e.id);
+                return (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() =>
+                      setExtras((prev) => (on ? prev.filter((x) => x.id !== e.id) : [...prev, e]))
+                    }
+                    className={`flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl border text-left transition-all active:scale-[0.98] ${
+                      on
+                        ? "border-brand-600 bg-brand-700 text-white shadow-md shadow-brand-700/20"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-brand-300"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className={`w-5 h-5 rounded-md grid place-items-center shrink-0 ${on ? "bg-white/15" : "bg-slate-100"}`}>
+                        <Check className={`w-3 h-3 ${on ? "text-white" : "text-transparent"}`} />
+                      </span>
+                      <span className="text-xs font-semibold truncate">{e.name}</span>
+                    </span>
+                    <span className={`text-xs font-bold tabular-nums ${on ? "text-gold-300" : "text-slate-500"}`}>
+                      +{e.price}€
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 2 && (
         <div className="animate-in">
           <h3 className="text-lg font-bold text-slate-800 mb-1">{c.s2}</h3>
           <p className="text-sm text-slate-400 mb-5">{c.s2h}</p>
@@ -682,45 +751,10 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
               })}
             </div>
           )}
-
-          {availableExtras.length > 0 && date && !slotsLoading && !dayClosed && (
-            <div className="mt-6">
-              <p className="text-[10px] uppercase tracking-[0.15em] text-slate-400 font-semibold mb-2.5">{c.extras}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {availableExtras.map((e) => {
-                  const on = extras.some((x) => x.id === e.id);
-                  return (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() =>
-                        setExtras((prev) => (on ? prev.filter((x) => x.id !== e.id) : [...prev, e]))
-                      }
-                      className={`flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl border text-left transition-all active:scale-[0.98] ${
-                        on
-                          ? "border-brand-600 bg-brand-700 text-white shadow-md shadow-brand-700/20"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-brand-300"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2 min-w-0">
-                        <span className={`w-5 h-5 rounded-md grid place-items-center shrink-0 ${on ? "bg-white/15" : "bg-slate-100"}`}>
-                          <Check className={`w-3 h-3 ${on ? "text-white" : "text-transparent"}`} />
-                        </span>
-                        <span className="text-xs font-semibold truncate">{e.name}</span>
-                      </span>
-                      <span className={`text-xs font-bold tabular-nums ${on ? "text-gold-300" : "text-slate-500"}`}>
-                        +{e.price}€
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {step === 2 && (
+      {step === 3 && (
         <div className="animate-in">
           <h3 className="text-lg font-bold text-slate-800 mb-1">{c.s3}</h3>
           <p className="text-sm text-slate-400 mb-5">{c.s3h}</p>
@@ -813,15 +847,15 @@ export default function BookingForm({ lang, salon, loading, preselect, onConsume
           </button>
         )}
 
-        {step < 2 ? (
+        {step < 3 ? (
           <button
             type="button"
             onClick={() => {
               setError("");
-              if (step === 1 && (!date || !time)) return setError(c.reqSlot);
+              if (step === 2 && (!date || !time)) return setError(c.reqSlot);
               setStep((s) => s + 1);
             }}
-            disabled={(step === 0 && !serviceId) || (step === 1 && (!date || !time))}
+            disabled={(step === 0 && !serviceId) || (step === 2 && (!date || !time))}
             className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-gradient-to-r from-brand-700 to-brand-600 text-white font-semibold text-sm shadow-md shadow-brand-700/15 hover:shadow-lg hover:from-brand-600 hover:to-brand-500 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
           >
             {c.next}

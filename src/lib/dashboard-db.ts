@@ -51,6 +51,12 @@ export interface AdditionalService {
   price: number;
   active: boolean;
   position: number;
+  serviceId: string | null;
+}
+
+export interface WorkerAdditionalService {
+  workerId: string;
+  additionalServiceId: string;
 }
 
 export interface Worker {
@@ -81,6 +87,7 @@ export interface SalonData {
   services: Service[];
   categories: ServiceCategory[];
   workerServices: WorkerService[];
+  workerAdditionalServices: WorkerAdditionalService[];
   additionalServices: AdditionalService[];
   workers: Worker[];
   config: SalonConfig;
@@ -194,6 +201,7 @@ export async function getSalonData(force = false): Promise<SalonData> {
     services: [],
     categories: [],
     workerServices: [],
+    workerAdditionalServices: [],
     additionalServices: [],
     workers: [],
     config: DEFAULT_CONFIG,
@@ -203,10 +211,11 @@ export async function getSalonData(force = false): Promise<SalonData> {
   if (!hasSupabaseConfig()) return empty;
 
   try {
-    const [svcRes, catRes, wsRes, addRes, userRes, settings] = await Promise.all([
+    const [svcRes, catRes, wsRes, waRes, addRes, userRes, settings] = await Promise.all([
       supabase.from("services").select("id, name, price, duration, category_id, position"),
       supabase.from("service_categories").select("*"),
       supabase.from("worker_services").select("*"),
+      supabase.from("worker_additional_services").select("*"),
       supabase.from("additional_services").select("*"),
       supabase
         .from("users")
@@ -218,12 +227,14 @@ export async function getSalonData(force = false): Promise<SalonData> {
     if (svcRes.error) throw svcRes.error;
     if (catRes.error) throw catRes.error;
     if (wsRes.error) throw wsRes.error;
+    if (waRes.error) throw waRes.error;
     if (addRes.error) throw addRes.error;
     if (userRes.error) throw userRes.error;
 
     const svcRows = svcRes.data ?? [];
     const catRows = catRes.data ?? [];
     const wsRows = wsRes.data ?? [];
+    const waRows = waRes.data ?? [];
     const addRows = addRes.data ?? [];
     const userRows = userRes.data ?? [];
 
@@ -283,13 +294,21 @@ export async function getSalonData(force = false): Promise<SalonData> {
       })
     );
 
+    const workerAdditionalServices: WorkerAdditionalService[] = waRows.map(
+      (r: { worker_id: unknown; additional_service_id: unknown }) => ({
+        workerId: String(r.worker_id),
+        additionalServiceId: String(r.additional_service_id),
+      })
+    );
+
     const additionalServices: AdditionalService[] = addRows
-      .map((r: { id: unknown; name: unknown; price: unknown; active: unknown; position: unknown }) => ({
+      .map((r: { id: unknown; name: unknown; price: unknown; active: unknown; position: unknown; service_id: unknown }) => ({
         id: String(r.id),
         name: String(r.name ?? "").trim(),
         price: Number(r.price ?? 0),
         active: r.active !== false,
         position: Number(r.position ?? 0) || 0,
+        serviceId: r.service_id == null ? null : String(r.service_id),
       }))
       .filter((s: AdditionalService) => s.id && s.name)
       .sort((a: AdditionalService, b: AdditionalService) => a.position - b.position || a.name.localeCompare(b.name));
@@ -315,6 +334,7 @@ export async function getSalonData(force = false): Promise<SalonData> {
       services,
       categories,
       workerServices,
+      workerAdditionalServices,
       additionalServices,
       workers,
       config,
@@ -363,7 +383,8 @@ export async function getAvailability(
   date: string,
   serviceDuration: number,
   workerId?: string | null,
-  serviceId?: string | null
+  serviceId?: string | null,
+  extraIds?: string[]
 ): Promise<AvailabilityResult> {
   const salon = await getSalonData();
   const busy = hasSupabaseConfig() ? await getBusyBlocks(date) : [];
@@ -373,6 +394,7 @@ export async function getAvailability(
     serviceDuration,
     workerId,
     serviceId,
+    extraIds,
     salon,
     busy,
   });
@@ -450,7 +472,31 @@ export async function createBooking(input: CreateBooking): Promise<BookingResult
   const service = services.find((s) => s.id === input.serviceId);
   if (!service) return { ok: false, error: "bad_service" };
 
-  const availability = await getAvailability(input.date, service.duration, input.workerId, service.id);
+  // Resolve extra services against the salon catalog so clients can only
+  // pick from active add-ons that belong to this service.
+  const extras: AdditionalService[] = [];
+  const extrasInput = Array.isArray(input.extras) ? input.extras : [];
+  if (extrasInput.length > 0) {
+    const byId = new Map(
+      additionalServices
+        .filter((x) => x.active !== false && x.serviceId === service.id)
+        .map((x) => [x.id, x])
+    );
+    extrasInput.forEach((e) => {
+      const found = byId.get(e.id);
+      if (found) extras.push(found);
+    });
+  }
+  const extraIds = extras.map((e) => e.id);
+  const extrasTotal = extras.reduce((s, x) => s + Number(x.price || 0), 0);
+
+  const availability = await getAvailability(
+    input.date,
+    service.duration,
+    input.workerId,
+    service.id,
+    extraIds
+  );
   if (availability.closed) return { ok: false, error: "closed" };
 
   const slot = availability.slots.find((s) => s.time === input.time);
@@ -465,19 +511,6 @@ export async function createBooking(input: CreateBooking): Promise<BookingResult
   const assigned = workers.find((w) => w.id === assignedId);
   const cleanPhone = normalizePhone(input.phone);
   const clientId = await findOrCreateClient(input.clientName, cleanPhone);
-
-  // Resolve extra services against the salon catalog so clients can only
-  // pick from active add-ons (no price/name tampering from the client).
-  const extras: AdditionalService[] = [];
-  const extrasInput = Array.isArray(input.extras) ? input.extras : [];
-  if (extrasInput.length > 0) {
-    const byId = new Map(additionalServices.filter((x) => x.active !== false).map((x) => [x.id, x]));
-    extrasInput.forEach((e) => {
-      const found = byId.get(e.id);
-      if (found) extras.push(found);
-    });
-  }
-  const extrasTotal = extras.reduce((s, x) => s + Number(x.price || 0), 0);
 
   const noteParts = [`Tel: ${cleanPhone}`];
   if (input.notes) noteParts.push(input.notes);

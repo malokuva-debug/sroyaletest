@@ -22,11 +22,15 @@ export async function GET(request: NextRequest) {
   const service = services.find((s) => s.id === serviceId);
   const duration = service?.duration ?? 60;
 
+  const rawExtras = sp.getAll("extraId");
+  const extraIds = rawExtras.filter((id) => id && id !== "any");
+
   const result = await getAvailability(
     date,
     duration,
     workerId && workerId !== "any" ? workerId : null,
-    service?.id
+    service?.id,
+    extraIds
   );
 
   return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });

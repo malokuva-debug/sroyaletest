@@ -1,6 +1,6 @@
 'use client';
 
-import { getUser, createUser, getAllWorkers, getData, saveShpenzim, deleteShpenzim, saveProdukt, deleteProdukt, saveTeArdhur, deleteTeArdhur, saveClient, deleteClient, saveAppointment, deleteAppointment, saveService, deleteService, saveServiceCategory, deleteServiceCategory, saveWorkerServices, getWorkerServices, saveWorkerSettings, getWorkerSettings, getAdditionalServices, saveAdditionalService, deleteAdditionalService, getRecurringExpenses, saveRecurringExpense, deleteRecurringExpense, applyRecurringExpenses, generatePayroll, markPayrollPaid, deletePayrollEntry, saveSettings as saveSettingsAction, deleteUser, createSession, getSessionUser, destroySession, getSetting, setupAdmin, testPush, getAnyOwner, getWorkerSchedule, saveWorkerSchedule, getWorkingHours, saveWorkingHours, getWorkerUnavailability, saveWorkerUnavailability, deleteWorkerUnavailability } from "@/lib/actions";
+import { getUser, createUser, getAllWorkers, getData, saveShpenzim, deleteShpenzim, saveProdukt, deleteProdukt, saveTeArdhur, deleteTeArdhur, saveClient, deleteClient, saveAppointment, deleteAppointment, saveService, deleteService, saveServiceCategory, deleteServiceCategory, saveWorkerServices, getWorkerServices, saveWorkerAdditionalServices, getWorkerAdditionalServices, saveWorkerSettings, getWorkerSettings, getAdditionalServices, saveAdditionalService, deleteAdditionalService, getRecurringExpenses, saveRecurringExpense, deleteRecurringExpense, applyRecurringExpenses, generatePayroll, markPayrollPaid, deletePayrollEntry, saveSettings as saveSettingsAction, deleteUser, createSession, getSessionUser, destroySession, getSetting, setupAdmin, testPush, getAnyOwner, getWorkerSchedule, saveWorkerSchedule, getWorkingHours, saveWorkingHours, getWorkerUnavailability, saveWorkerUnavailability, deleteWorkerUnavailability } from "@/lib/actions";
 import { translations } from "@/lib/dashboard-translations";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -178,6 +178,7 @@ function App() {
   const [services, setServices] = useState([]);
   const [categories, setCategories] = useState([]);
   const [workerServices, setWorkerServicesState] = useState([]);
+  const [workerAdditionalServices, setWorkerAdditionalServicesState] = useState([]);
   const [additionalServices, setAdditionalServices] = useState([]);
   const [workerSettings, setWorkerSettingsState] = useState([]);
   const [payroll, setPayroll] = useState([]);
@@ -298,6 +299,7 @@ function App() {
       setServices(data.services);
       setCategories(data.categories || []);
       setWorkerServicesState(data.workerServices || []);
+      setWorkerAdditionalServicesState(data.workerAdditionalServices || []);
       setAdditionalServices(data.additionalServices || []);
       setWorkerSettingsState(data.workerSettings || []);
       setPayroll(data.payroll || []);
@@ -573,8 +575,13 @@ function App() {
     return withSave(saveService(item), () => toast.error('Gabim në ruajtje'));
   };
   const handleDeleteService = (id) => {
+    const doomedAddons = additionalServices.filter(a => a.serviceId === id).map(a => a.id);
     setServices(prev => prev.filter(x => x.id !== id));
     setWorkerServicesState(prev => prev.filter(x => x.serviceId !== id));
+    if (doomedAddons.length) {
+      setAdditionalServices(prev => prev.filter(x => x.serviceId !== id));
+      setWorkerAdditionalServicesState(prev => prev.filter(x => !doomedAddons.includes(x.additionalServiceId)));
+    }
     return withSave(deleteService(id), () => toast.error('Gabim në fshirje'));
   };
 
@@ -602,6 +609,7 @@ function App() {
   };
   const handleDeleteAdditionalService = (id) => {
     setAdditionalServices(prev => prev.filter(x => x.id !== id));
+    setWorkerAdditionalServicesState(prev => prev.filter(x => x.additionalServiceId !== id));
     return withSave(deleteAdditionalService(id), () => toast.error('Gabim në fshirje'));
   };
 
@@ -1146,7 +1154,7 @@ function App() {
         )}
         {tab === 'takimet' && (
           <TakimetView items={appointments} onSave={handleSaveAppointment} onDelete={handleDeleteAppointment} services={services} clients={clients} onSaveClient={handleSaveClient}
-            onComplete={completeAppointment} onCancel={cancelAppointment} onReopen={reopenAppointment} workers={workers} currentUser={user} t={t} lang={lang} fmtDate={fmtDate} rangeFor={rangeFor} nowTime={nowTime} confirmAsync={confirmAsync} additionalServices={additionalServices} />
+            onComplete={completeAppointment} onCancel={cancelAppointment} onReopen={reopenAppointment} workers={workers} currentUser={user} t={t} lang={lang} fmtDate={fmtDate} rangeFor={rangeFor} nowTime={nowTime} confirmAsync={confirmAsync} additionalServices={additionalServices} onSaveAdditionalService={handleSaveAdditionalService} />
         )}
         {tab === 'me_shume' && !subview && (
           <MoreMenu setSubview={setSubview} lowStockCount={lowStockCount} user={user} t={t} lang={lang} />
@@ -1158,7 +1166,7 @@ function App() {
           <KlientetView clients={clients} onSaveClient={handleSaveClient} onDeleteClient={handleDeleteClient} teArdhurat={teArdhurat} t={t} fmtDate={fmtDate} confirmAsync={confirmAsync} />
         )}
         {tab === 'me_shume' && subview?.id === 'sherbimet' && (
-          <SherbimetView items={services} categories={categories} onSave={handleSaveService} onDelete={handleDeleteService} onSaveCategory={handleSaveServiceCategory} onDeleteCategory={handleDeleteServiceCategory} t={t} confirmAsync={confirmAsync} />
+          <SherbimetView items={services} categories={categories} onSave={handleSaveService} onDelete={handleDeleteService} onSaveCategory={handleSaveServiceCategory} onDeleteCategory={handleDeleteServiceCategory} t={t} confirmAsync={confirmAsync} additionalServices={additionalServices} onSaveAdditionalService={handleSaveAdditionalService} onDeleteAdditionalService={handleDeleteAdditionalService} />
         )}
         {tab === 'me_shume' && subview?.id === 'analitika' && (
           <AnalitikaView teArdhurat={teArdhurat} shpenzimet={shpenzimet} appointments={appointments} clients={clients} settings={settings} t={t} lang={lang} fmtDate={fmtDate} rangeFor={rangeFor} />
@@ -1172,6 +1180,7 @@ function App() {
             data={{ shpenzimet, produktet, teArdhurat, clients, appointments, services }}
             categories={categories}
             workerServices={workerServices}
+            workerAdditionalServices={workerAdditionalServices}
             additionalServices={additionalServices}
             workerSettings={workerSettings}
             payroll={payroll}
@@ -1179,6 +1188,7 @@ function App() {
             services={services}
             setCategories={setCategories}
             setWorkerServicesState={setWorkerServicesState}
+            setWorkerAdditionalServicesState={setWorkerAdditionalServicesState}
             setAdditionalServices={setAdditionalServices}
             setWorkerSettingsState={setWorkerSettingsState}
             setPayroll={setPayroll}
@@ -1205,6 +1215,7 @@ function App() {
               setServices(d.services || []);
               setCategories(d.categories || []);
               setWorkerServicesState(d.workerServices || []);
+              setWorkerAdditionalServicesState(d.workerAdditionalServices || []);
               setAdditionalServices(d.additionalServices || []);
               setPayroll(d.payroll || []);
               setRecurringExpenses(d.recurringExpenses || []);
@@ -1754,7 +1765,7 @@ function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClie
 /* =====================================================================
    TAKIMET
 ===================================================================== */
-function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient, onComplete, onCancel, onReopen, workers, currentUser, t, lang, fmtDate, rangeFor, nowTime, confirmAsync }) {
+function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient, onComplete, onCancel, onReopen, workers, currentUser, t, lang, fmtDate, rangeFor, nowTime, confirmAsync, additionalServices = [], onSaveAdditionalService }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedDate, setSelectedDate] = useState(todayISO());
@@ -1765,6 +1776,7 @@ function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient,
     date: todayISO(), time: nowTime(), extras: [],
     workerId: '', workerName: '',
   });
+  const [quickAddName, setQuickAddName] = useState('');
 
   function openNew() {
     setEditing(null);
@@ -1790,7 +1802,7 @@ function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient,
   }
   function selectService(id) {
     const s = services.find(x => x.id === id);
-    setForm(f => ({ ...f, serviceId: id, serviceName: s?.name || '' }));
+    setForm(f => ({ ...f, serviceId: id, serviceName: s?.name || '', extras: [] }));
   }
 
   function addExtra() {
@@ -1801,6 +1813,20 @@ function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient,
   }
   function removeExtra(id) {
     setForm(f => ({ ...f, extras: (f.extras || []).filter(e => e.id !== id) }));
+  }
+  function toggleAddon(a) {
+    setForm(f => {
+      const on = (f.extras || []).some(e => e.id === a.id);
+      if (on) return { ...f, extras: (f.extras || []).filter(e => e.id !== a.id) };
+      return { ...f, extras: [...(f.extras || []), { id: a.id, name: a.name, price: Number(a.price || 0) }] };
+    });
+  }
+  async function quickAddAddon(name) {
+    const clean = (name || '').trim();
+    if (!clean) { toast.error(t('vendos_emrin_e_sherbimit')); return; }
+    const newItem = { id: uuid(), name: clean, price: 0, active: true, serviceId: form.serviceId || null, _isNew: true };
+    if (onSaveAdditionalService) await onSaveAdditionalService(newItem);
+    setForm(f => ({ ...f, extras: [...(f.extras || []), { id: newItem.id, name: newItem.name, price: 0 }] }));
   }
 
   const mainPrice = useMemo(() => {
@@ -2066,6 +2092,36 @@ function TakimetView({ items, onSave, onDelete, services, clients, onSaveClient,
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs">{t('sherbime_shtesë')}</Label>
                 <Button type="button" size="sm" variant="ghost" className="h-7 text-rose-600" onClick={addExtra}>
+                  <Plus className="w-3.5 h-3.5 mr-1" /> {t('shto')}
+                </Button>
+              </div>
+              {form.serviceId && additionalServices.filter(a => a.active !== false && a.serviceId === form.serviceId).length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {additionalServices.filter(a => a.active !== false && a.serviceId === form.serviceId).map(a => {
+                    const on = (form.extras || []).some(e => e.id === a.id);
+                    return (
+                      <button key={a.id} type="button"
+                        onClick={() => toggleAddon(a)}
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] transition-all ${
+                          on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
+                        }`}>
+                        <span className="truncate">{a.name}</span>
+                        <span className="tabular-nums opacity-70">{fmtMoney(a.price)}</span>
+                        {on && <Check className="w-3 h-3 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="flex gap-2 mb-2">
+                <Input
+                  className="h-9 flex-1 text-sm"
+                  placeholder={t('shto_sherbim_shtese_quick')}
+                  value={quickAddName}
+                  onChange={(e) => setQuickAddName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); quickAddAddon(quickAddName); setQuickAddName(''); } }}
+                />
+                <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={() => { quickAddAddon(quickAddName); setQuickAddName(''); }}>
                   <Plus className="w-3.5 h-3.5 mr-1" /> {t('shto')}
                 </Button>
               </div>
@@ -2425,11 +2481,14 @@ function KlientetView({ clients, onSaveClient, onDeleteClient, teArdhurat, t, fm
 /* =====================================================================
    SHËRBIMET
 ===================================================================== */
-function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategory, onDeleteCategory, t, confirmAsync }) {
+function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategory, onDeleteCategory, t, confirmAsync, additionalServices = [], onSaveAdditionalService, onDeleteAdditionalService }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [catOpen, setCatOpen] = useState(false);
   const [editingCat, setEditingCat] = useState(null);
+  const [addonOpen, setAddonOpen] = useState(false);
+  const [addonEditing, setAddonEditing] = useState(null);
+  const [addonFilter, setAddonFilter] = useState('');
 
   async function handleLocalSave(form) {
     const payload = {
@@ -2544,6 +2603,78 @@ function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategor
         </CardContent>
       </Card>
 
+      <Card className="border-dashed">
+        <CardContent className="p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">{t('sherbimet_shtese_katalogu')}</p>
+            <Button size="sm" variant="outline" onClick={() => { setAddonEditing(null); setAddonOpen(true); }}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> {t('shto_sherbim_shtese')}
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">{t('sherbimet_shtese_desc')}</p>
+          {additionalServices.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-2 text-center">{t('asnje_sherbim_shtese')}</p>
+          ) : (
+            <div className="space-y-2">
+              {items.map(svc => {
+                const addons = additionalServices.filter(a => a.serviceId === svc.id);
+                if (addons.length === 0) return null;
+                return (
+                  <div key={svc.id}>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{svc.name}</p>
+                    <div className="space-y-1">
+                      {addons.map(a => (
+                        <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${a.active !== false ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                            <span className={a.active === false ? 'line-through text-muted-foreground' : ''}>{a.name}</span>
+                            <span className="text-xs text-muted-foreground tabular-nums">{fmtMoney(a.price)}</span>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setAddonEditing(a); setAddonOpen(true); }}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" onClick={async () => {
+                              if (await confirmAsync(t('fshi_sherbimin_shtese'))) { onDeleteAdditionalService(a.id); toast.success(t('u_fshi')); }
+                            }}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {additionalServices.filter(a => a.serviceId === null).length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{t('pa_kategori')}</p>
+                  {additionalServices.filter(a => a.serviceId === null).map(a => (
+                    <div key={a.id} className="flex items-center justify-between p-2 rounded-lg border text-sm">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${a.active !== false ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                        <span className={a.active === false ? 'line-through text-muted-foreground' : ''}>{a.name}</span>
+                        <span className="text-xs text-muted-foreground tabular-nums">{fmtMoney(a.price)}</span>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setAddonEditing(a); setAddonOpen(true); }}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" onClick={async () => {
+                          if (await confirmAsync(t('fshi_sherbimin_shtese'))) { onDeleteAdditionalService(a.id); toast.success(t('u_fshi')); }
+                        }}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <FAB t={t} onClick={() => { setEditing(null); setOpen(true); }} />
 
       <FormDialog t={t}
@@ -2560,6 +2691,40 @@ function SherbimetView({ items, categories = [], onSave, onDelete, onSaveCategor
           },
         ]}
         onSave={handleLocalSave}
+      />
+
+      <FormDialog t={t}
+        open={addonOpen} onOpenChange={(v) => { setAddonOpen(v); if (!v) setAddonEditing(null); }}
+        title={addonEditing ? t('modifiko_sherbimin_shtese') : t('shto_sherbim_shtese')}
+        initial={addonEditing || { name: '', price: '', serviceId: '', active: true }}
+        fields={[
+          { name: 'name', label: t('emri'), type: 'text', required: true },
+          { name: 'price', label: t('cmimi'), type: 'number', step: '0.01', required: true },
+          {
+            name: 'serviceId', label: t('sherbimi'), type: 'select', required: false,
+            options: [
+              { value: '', label: t('pa_kategori') },
+              ...items.map(s => ({ value: s.id, label: s.name })),
+            ],
+          },
+          {
+            name: 'active', label: t('aktive'), type: 'select', required: false,
+            options: [
+              { value: 'true', label: t('po') },
+              { value: 'false', label: t('jo') },
+            ],
+          },
+        ]}
+        onSave={async (form) => {
+          await onSaveAdditionalService({
+            ...addonEditing,
+            ...form,
+            price: Number(form.price || 0),
+            serviceId: form.serviceId || null,
+            active: form.active !== 'false' && form.active !== false,
+          });
+          setAddonOpen(false); setAddonEditing(null);
+        }}
       />
 
       <FormDialog t={t}
@@ -2835,12 +3000,13 @@ function AnalitikaView({ teArdhurat, shpenzimet, appointments = [], clients = []
 /* =====================================================================
    CILËSIMET
 ===================================================================== */
-function WorkerManagement({ workers, setWorkers, services = [], workerServices = [], workerSettings = [], setWorkerServicesState, setWorkerSettingsState, confirmAsync, t }) {
+function WorkerManagement({ workers, setWorkers, services = [], categories = [], additionalServices = [], workerServices = [], workerAdditionalServices = [], workerSettings = [], setWorkerServicesState, setWorkerAdditionalServicesState, setWorkerSettingsState, confirmAsync, t }) {
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [salaryForm, setSalaryForm] = useState({});
   const [serviceSel, setServiceSel] = useState({});
+  const [addonSel, setAddonSel] = useState({});
 
   async function handleSave(formData) {
     const isNew = !current?.id;
@@ -2875,8 +3041,24 @@ function WorkerManagement({ workers, setWorkers, services = [], workerServices =
     setExpanded(w.id);
     const ws = workerSettings.find(x => x.workerId === w.id);
     setSalaryForm(prev => ({ ...prev, [w.id]: ws?.salaryPercent ?? '' }));
-    const assigned = workerServices.filter(x => x.workerId === w.id).map(x => x.serviceId);
-    setServiceSel(prev => ({ ...prev, [w.id]: new Set(assigned) }));
+    setServiceSel(prev => ({ ...prev, [w.id]: new Set(services.map(s => s.id)) }));
+    setAddonSel(prev => ({ ...prev, [w.id]: new Set(additionalServices.filter(a => a.active !== false).map(a => a.id)) }));
+  }
+
+  function toggleAllService(w, ids, on) {
+    setServiceSel(prev => {
+      const set = new Set(prev[w.id] || []);
+      ids.forEach(id => { if (on) set.add(id); else set.delete(id); });
+      return { ...prev, [w.id]: set };
+    });
+  }
+
+  function toggleAllAddon(w, ids, on) {
+    setAddonSel(prev => {
+      const set = new Set(prev[w.id] || []);
+      ids.forEach(id => { if (on) set.add(id); else set.delete(id); });
+      return { ...prev, [w.id]: set };
+    });
   }
 
   async function saveWorkerServicesFor(w) {
@@ -2885,6 +3067,16 @@ function WorkerManagement({ workers, setWorkers, services = [], workerServices =
     setWorkerServicesState?.(prev => [
       ...prev.filter(x => x.workerId !== w.id),
       ...ids.map(sid => ({ workerId: w.id, serviceId: sid })),
+    ]);
+    toast.success(t('shërbimet_u_ruajtën'));
+  }
+
+  async function saveWorkerAdditionalServicesFor(w) {
+    const ids = [...(addonSel[w.id] || [])];
+    await saveWorkerAdditionalServices(w.id, ids);
+    setWorkerAdditionalServicesState?.(prev => [
+      ...prev.filter(x => x.workerId !== w.id),
+      ...ids.map(aid => ({ workerId: w.id, additionalServiceId: aid })),
     ]);
     toast.success(t('shërbimet_u_ruajtën'));
   }
@@ -2966,31 +3158,135 @@ function WorkerManagement({ workers, setWorkers, services = [], workerServices =
                 {expanded === w.id && (
                   <div className="mt-3 pt-3 border-t space-y-3">
                     <div className="space-y-1.5">
-                      <p className="text-xs font-medium">{t('sherbimet_e_punetorit')}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium">{t('sherbimet_e_punetorit')}</p>
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t('zgjidh_te_gjitha')} onClick={() => toggleAllService(w, services.map(s => s.id), true)}>
+                            <Check className="w-3 h-3" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t('zgjidh_asnje')} onClick={() => toggleAllService(w, services.map(s => s.id), false)}>
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
                       {services.length === 0 ? (
                         <p className="text-[11px] text-muted-foreground">{t('asnje_sherbim')}</p>
                       ) : (
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {services.map(s => {
-                            const on = serviceSel[w.id]?.has(s.id);
+                        <div className="space-y-2">
+                          {categories.map(cat => {
+                            const catServices = services.filter(s => s.categoryId === cat.id);
+                            if (catServices.length === 0) return null;
+                            const allOn = catServices.every(s => serviceSel[w.id]?.has(s.id));
+                            const someOn = catServices.some(s => serviceSel[w.id]?.has(s.id));
                             return (
-                              <button key={s.id} type="button"
-                                onClick={() => setServiceSel(prev => {
+                              <div key={cat.id}>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{cat.name}</span>
+                                  <Button size="icon" variant="ghost" className="h-5 w-5" title={allOn ? t('zgjidh_asnje') : t('zgjidh_te_gjitha')}
+                                    onClick={() => toggleAllService(w, catServices.map(s => s.id), !allOn)}>
+                                    {allOn ? <X className="w-2.5 h-2.5" /> : <Check className="w-2.5 h-2.5" />}
+                                  </Button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1.5 mt-1">
+                                  {catServices.map(s => {
+                                    const on = serviceSel[w.id]?.has(s.id);
+                                    return (
+                                      <button key={s.id} type="button"
+                                        onClick={() => setServiceSel(prev => {
+                                          const set = new Set(prev[w.id] || []);
+                                          if (set.has(s.id)) set.delete(s.id); else set.add(s.id);
+                                          return { ...prev, [w.id]: set };
+                                        })}
+                                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] transition-all ${
+                                          on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
+                                        }`}>
+                                        <span className="truncate">{s.name}</span>
+                                        {on && <Check className="w-3 h-3 shrink-0 ml-1" />}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {(() => {
+                            const uncat = services.filter(s => !s.categoryId);
+                            if (uncat.length === 0) return null;
+                            const allOn = uncat.every(s => serviceSel[w.id]?.has(s.id));
+                            return (
+                              <div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('pa_kategori')}</span>
+                                  <Button size="icon" variant="ghost" className="h-5 w-5" title={allOn ? t('zgjidh_asnje') : t('zgjidh_te_gjitha')}
+                                    onClick={() => toggleAllService(w, uncat.map(s => s.id), !allOn)}>
+                                    {allOn ? <X className="w-2.5 h-2.5" /> : <Check className="w-2.5 h-2.5" />}
+                                  </Button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1.5 mt-1">
+                                  {uncat.map(s => {
+                                    const on = serviceSel[w.id]?.has(s.id);
+                                    return (
+                                      <button key={s.id} type="button"
+                                        onClick={() => setServiceSel(prev => {
+                                          const set = new Set(prev[w.id] || []);
+                                          if (set.has(s.id)) set.delete(s.id); else set.add(s.id);
+                                          return { ...prev, [w.id]: set };
+                                        })}
+                                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] transition-all ${
+                                          on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
+                                        }`}>
+                                        <span className="truncate">{s.name}</span>
+                                        {on && <Check className="w-3 h-3 shrink-0 ml-1" />}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                      <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={() => saveWorkerServicesFor(w)}>
+                        <Save className="w-3 h-3 mr-1" /> {t('ruaj_sherbimet')}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium">{t('sherbimet_shtese_te_punetorit')}</p>
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t('zgjidh_te_gjitha')} onClick={() => toggleAllAddon(w, additionalServices.filter(a => a.active !== false).map(a => a.id), true)}>
+                            <Check className="w-3 h-3" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t('zgjidh_asnje')} onClick={() => toggleAllAddon(w, additionalServices.filter(a => a.active !== false).map(a => a.id), false)}>
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                      {additionalServices.filter(a => a.active !== false).length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground">{t('asnje_sherbim_shtese')}</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {additionalServices.filter(a => a.active !== false).map(a => {
+                            const on = addonSel[w.id]?.has(a.id);
+                            return (
+                              <button key={a.id} type="button"
+                                onClick={() => setAddonSel(prev => {
                                   const set = new Set(prev[w.id] || []);
-                                  if (set.has(s.id)) set.delete(s.id); else set.add(s.id);
+                                  if (set.has(a.id)) set.delete(a.id); else set.add(a.id);
                                   return { ...prev, [w.id]: set };
                                 })}
                                 className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] transition-all ${
                                   on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
                                 }`}>
-                                <span className="truncate">{s.name}</span>
+                                <span className="truncate">{a.name}</span>
                                 {on && <Check className="w-3 h-3 shrink-0 ml-1" />}
                               </button>
                             );
                           })}
                         </div>
                       )}
-                      <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={() => saveWorkerServicesFor(w)}>
+                      <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={() => saveWorkerAdditionalServicesFor(w)}>
                         <Save className="w-3 h-3 mr-1" /> {t('ruaj_sherbimet')}
                       </Button>
                     </div>
@@ -3507,87 +3803,6 @@ function WorkerUnavailabilityCard({ workers, settings, setSettings, t, toast }) 
 }
 
 /* =====================================================================
-   ADDITIONAL SERVICES CATALOG
-===================================================================== */
-function AdditionalServicesCard({ items, onSave, onDelete, t, confirmAsync }) {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-
-  const active = items.filter(x => x.active !== false);
-  const inactive = items.filter(x => x.active === false);
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Plus className="w-4 h-4" /> {t('sherbimet_shtese_katalogu')}
-          </CardTitle>
-          <Button size="sm" variant="outline" onClick={() => { setEditing(null); setOpen(true); }}>
-            <Plus className="w-4 h-4 mr-1" /> {t('shto_sherbim_shtese')}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-1.5">
-        <p className="text-[11px] text-muted-foreground">{t('sherbimet_shtese_desc')}</p>
-        {items.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">{t('asnje_sherbim_shtese')}</p>
-        ) : (
-          <>
-            {[...active, ...inactive].map(s => (
-              <div key={s.id} className="flex items-center justify-between p-2 rounded-lg border text-sm">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${s.active !== false ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                  <span className={s.active === false ? 'line-through text-muted-foreground' : ''}>{s.name}</span>
-                  <span className="text-xs text-muted-foreground tabular-nums">{fmtMoney(s.price)}</span>
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditing(s); setOpen(true); }}>
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" onClick={async () => {
-                    if (await confirmAsync(t('fshi_sherbimin_shtese'))) { onDelete(s.id); toast.success(t('u_fshi')); }
-                  }}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </>
-        )}
-      </CardContent>
-
-      <FormDialog t={t}
-        open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditing(null); }}
-        title={editing ? t('modifiko_sherbimin_shtese') : t('shto_sherbim_shtese')}
-        initial={editing || { name: '', price: '', active: true }}
-        fields={[
-          { name: 'name', label: t('emri'), type: 'text', required: true },
-          { name: 'price', label: t('cmimi'), type: 'number', step: '0.01', required: true },
-          {
-            name: 'active', label: t('aktive'), type: 'select', required: false,
-            options: [
-              { value: 'true', label: t('po') },
-              { value: 'false', label: t('jo') },
-            ],
-          },
-        ]}
-        onSave={async (form) => {
-          const payload = {
-            ...editing,
-            ...form,
-            price: Number(form.price || 0),
-            active: form.active !== 'false' && form.active !== false,
-          };
-          await onSave(payload);
-          setOpen(false); setEditing(null);
-        }}
-      />
-    </Card>
-  );
-}
-
-/* =====================================================================
    RECURRING EXPENSES
 ===================================================================== */
 function RecurringExpensesCard({ items, onSave, onDelete, onApply, t, confirmAsync }) {
@@ -3771,7 +3986,7 @@ function PayrollCard({ payroll = [], onGenerate, onMarkPaid, onDelete, onRefresh
   );
 }
 
-function CilesimetView({ user, setUser, workers, setWorkers, settings, setSettings, theme, toggleTheme, data, categories, workerServices, additionalServices, workerSettings, payroll, recurringExpenses, services, setCategories, setWorkerServicesState, setAdditionalServices, setWorkerSettingsState, setPayroll, setRecurringExpenses, onRefresh, restore, onLogout, onChangePassword, notifPermission, onEnableNotif, onDisableNotif, onTestNotif, onServerTestPush, emailBusy, lastEmailAt, onSaveEmail, onSendEmail, lang, setLang, t, rangeFor, confirmAsync }) {
+function CilesimetView({ user, setUser, workers, setWorkers, settings, setSettings, theme, toggleTheme, data, categories, workerServices, workerAdditionalServices, additionalServices, workerSettings, payroll, recurringExpenses, services, setCategories, setWorkerServicesState, setWorkerAdditionalServicesState, setAdditionalServices, setWorkerSettingsState, setPayroll, setRecurringExpenses, onRefresh, restore, onLogout, onChangePassword, notifPermission, onEnableNotif, onDisableNotif, onTestNotif, onServerTestPush, emailBusy, lastEmailAt, onSaveEmail, onSendEmail, lang, setLang, t, rangeFor, confirmAsync }) {
   const locale = lang === 'sq' ? 'sq-AL' : 'en-US';
   const [pwOpen, setPwOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
@@ -3823,7 +4038,7 @@ function CilesimetView({ user, setUser, workers, setWorkers, settings, setSettin
 
   return (
     <div className="space-y-4">
-      {isOwner && <WorkerManagement workers={workers} setWorkers={setWorkers} services={services} workerServices={workerServices} workerSettings={workerSettings} setWorkerServicesState={setWorkerServicesState} setWorkerSettingsState={setWorkerSettingsState} confirmAsync={confirmAsync} t={t} />}
+      {isOwner && <WorkerManagement workers={workers} setWorkers={setWorkers} services={services} categories={categories} additionalServices={additionalServices} workerServices={workerServices} workerAdditionalServices={workerAdditionalServices} workerSettings={workerSettings} setWorkerServicesState={setWorkerServicesState} setWorkerAdditionalServicesState={setWorkerAdditionalServicesState} setWorkerSettingsState={setWorkerSettingsState} confirmAsync={confirmAsync} t={t} />}
 
       {isOwner && (
         <WorkingDaysCard settings={settings} setSettings={setSettings} t={t} toast={toast} />
@@ -3839,18 +4054,6 @@ function CilesimetView({ user, setUser, workers, setWorkers, settings, setSettin
 
       {isOwner && (
         <WorkerUnavailabilityCard workers={workers} settings={settings} setSettings={setSettings} t={t} toast={toast} />
-      )}
-
-      {isOwner && (
-        <AdditionalServicesCard items={additionalServices} onSave={setAdditionalServices ? (d) => {
-          const isNew = !d.id;
-          const item = { ...d, id: d.id || uuid(), _isNew: isNew };
-          setAdditionalServices(prev => isNew ? [...prev, item] : prev.map(x => x.id === item.id ? item : x));
-          return saveAdditionalService(item).catch(() => toast.error('Gabim në ruajtje'));
-        } : undefined} onDelete={setAdditionalServices ? (id) => {
-          setAdditionalServices(prev => prev.filter(x => x.id !== id));
-          return deleteAdditionalService(id).catch(() => toast.error('Gabim në fshirje'));
-        } : undefined} t={t} confirmAsync={confirmAsync} />
       )}
 
       {isOwner && (

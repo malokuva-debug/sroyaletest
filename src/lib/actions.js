@@ -167,6 +167,7 @@ export async function deleteUser(id) {
   // so the delete still works on databases that haven't run the migration.
   const cleanup = [
     supabase.from('worker_services').delete().eq('worker_id', id),
+    supabase.from('worker_additional_services').delete().eq('worker_id', id),
     supabase.from('worker_settings').delete().eq('worker_id', id),
     supabase.from('appointments').update({ worker_id: null }).eq('worker_id', id).in('status', ['pending', 'canceled']),
     supabase.from('te_ardhurat').update({ worker_id: null }).eq('worker_id', id),
@@ -282,6 +283,7 @@ export async function getData(role, userId) {
       usersRes,
       categories,
       workerServices,
+      workerAdditionalServices,
       additionalServices,
       workerSettings,
       payroll,
@@ -301,6 +303,7 @@ export async function getData(role, userId) {
       supabase.from('users').select('*'),
       safeSelect('service_categories', '*'),
       safeSelect('worker_services', '*'),
+      safeSelect('worker_additional_services', '*'),
       safeSelect('additional_services', '*'),
       safeSelect('worker_settings', '*'),
       role === 'owner' ? safeSelect('payroll', '*') : Promise.resolve([]),
@@ -349,6 +352,7 @@ export async function getData(role, userId) {
       services: servicesData,
       categories,
       workerServices,
+      workerAdditionalServices,
       additionalServices,
       workerSettings,
       payroll,
@@ -831,9 +835,17 @@ export async function saveService(data) {
 }
 
 export async function deleteService(id) {
+  // Remove the service plus its add-ons and every worker↔add-on link
+  // belonging to those add-ons.
+  const addonRows = await supabase.from('additional_services').select('id').eq('service_id', id).catch(() => ({ data: [] }));
+  const addonIds = (addonRows.data || []).map(r => r.id);
   await Promise.all([
     supabase.from('services').delete().eq('id', id).catch(() => {}),
     supabase.from('worker_services').delete().eq('service_id', id).catch(() => {}),
+    ...(addonIds.length ? [
+      supabase.from('worker_additional_services').delete().in('additional_service_id', addonIds).catch(() => {}),
+      supabase.from('additional_services').delete().in('id', addonIds).catch(() => {}),
+    ] : []),
   ]);
   revalidatePath('/dashboard');
 }
@@ -909,6 +921,29 @@ export async function saveWorkerServices(workerId, serviceIds) {
   revalidatePath('/dashboard');
 }
 
+export async function getWorkerAdditionalServices() {
+  try {
+    const { data, error } = await supabase.from('worker_additional_services').select('*');
+    if (error) throw error;
+    return toCamelArray(data);
+  } catch (error) {
+    console.error('Error fetching worker additional services:', error);
+    return [];
+  }
+}
+
+export async function saveWorkerAdditionalServices(workerId, additionalServiceIds) {
+  try {
+    await supabase.from('worker_additional_services').delete().eq('worker_id', workerId);
+    const rows = (additionalServiceIds || []).map(id => ({ worker_id: workerId, additional_service_id: id }));
+    if (rows.length) await supabase.from('worker_additional_services').insert(rows);
+  } catch (error) {
+    console.error('Error saving worker additional services:', error);
+    throw error;
+  }
+  revalidatePath('/dashboard');
+}
+
 // ─── Worker settings (salary %, notes) ──────────────────────────────────────
 
 export async function getWorkerSettings() {
@@ -958,11 +993,12 @@ export async function getAdditionalServices() {
 
 export async function saveAdditionalService(data) {
   const row = {
-    id:       data.id || uuid(),
-    name:     data.name,
-    price:    Number(data.price || 0),
-    active:   data.active !== false,
-    position: data.position != null ? Number(data.position) : 0,
+    id:        data.id || uuid(),
+    name:      data.name,
+    price:     Number(data.price || 0),
+    active:    data.active !== false,
+    position:  data.position != null ? Number(data.position) : 0,
+    service_id: data.serviceId || null,
   };
   const isNew = data._isNew !== undefined ? data._isNew : !data.id;
   if (!isNew) {
@@ -975,6 +1011,7 @@ export async function saveAdditionalService(data) {
 }
 
 export async function deleteAdditionalService(id) {
+  await supabase.from('worker_additional_services').delete().eq('additional_service_id', id);
   await supabase.from('additional_services').delete().eq('id', id);
   revalidatePath('/dashboard');
 }

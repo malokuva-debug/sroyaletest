@@ -8,6 +8,7 @@
  *  - worker weekly schedule    → worker.days/start/end (sparta_worker_schedule)
  *  - worker unavailability     → salon.unavailability (sparta_worker_unavailability)
  *  - worker↔service capability → salon.workerServices (worker_services table)
+ *  - worker↔add-on capability  → salon.workerAdditionalServices (worker_additional_services)
  *  - existing appointments     → busy blocks passed in by the caller
  */
 
@@ -39,6 +40,7 @@ export interface AvailabilityInput {
   serviceDuration: number;
   workerId?: string | null;
   serviceId?: string | null;
+  extraIds?: string[];
   salon: SalonData;
   busy: BusyBlock[];
   now?: { todayIso: string; minutesNow: number };
@@ -97,20 +99,33 @@ function workerBlockedOn(
 }
 
 export function computeAvailability(input: AvailabilityInput): AvailabilityResult {
-  const { date, serviceDuration, workerId, serviceId, salon, busy, now } = input;
+  const { date, serviceDuration, workerId, serviceId, extraIds = [], salon, busy, now } = input;
 
   const dow = new Date(`${date}T00:00:00`).getDay();
   const dayHours = salon.config.hours[String(dow)];
 
-  // Per-worker service capability from worker_services (when a service is
-  // selected). Workers with no explicit rows are considered able to do any
-  // service (existing behaviour), so old deployments keep working.
+  // Per-worker capability: worker_services covers the main service,
+  // worker_additional_services covers the selected add-ons. When there are
+  // no explicit rows for a table, workers are considered able to do anything
+  // (existing behaviour), so old deployments keep working.
   const capable = (wId: string): boolean => {
-    if (!serviceId) return true;
-    if (!salon.workerServices || salon.workerServices.length === 0) return true;
-    return salon.workerServices.some(
-      (ws) => ws.workerId === wId && ws.serviceId === serviceId
-    );
+    if (serviceId) {
+      if (salon.workerServices && salon.workerServices.length > 0) {
+        const hasService = salon.workerServices.some(
+          (ws) => ws.workerId === wId && ws.serviceId === serviceId
+        );
+        if (!hasService) return false;
+      }
+    }
+    if (extraIds.length > 0 && salon.workerAdditionalServices && salon.workerAdditionalServices.length > 0) {
+      for (const extraId of extraIds) {
+        const ok = salon.workerAdditionalServices.some(
+          (was) => was.workerId === wId && was.additionalServiceId === extraId
+        );
+        if (!ok) return false;
+      }
+    }
+    return true;
   };
 
   const workerList = salon.workers.map((w) => ({

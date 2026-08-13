@@ -37,13 +37,27 @@ create table if not exists worker_services (
 );
 
 -- ─────────────────── additional services catalog ───────────────────
+-- Each add-on belongs to a service (service_id); the landing page only
+-- offers the add-ons of the selected service.
+
+alter table additional_services add column if not exists service_id text;
+create index if not exists idx_additional_services_service_id on additional_services (service_id);
 
 create table if not exists additional_services (
   id text primary key not null,
   name text not null,
   price real not null default 0,
   active boolean not null default true,
-  position integer default 0
+  position integer default 0,
+  service_id text
+);
+
+-- ─────────────────── worker ↔ additional service assignments ───────────────────
+
+create table if not exists worker_additional_services (
+  worker_id text not null,
+  additional_service_id text not null,
+  primary key (worker_id, additional_service_id)
 );
 
 -- ─────────────────── worker settings (salary %) ───────────────────
@@ -148,6 +162,7 @@ insert into settings (key, value) values ('default_service_category', 'null')
 alter table service_categories enable row level security;
 alter table worker_services enable row level security;
 alter table additional_services enable row level security;
+alter table worker_additional_services enable row level security;
 alter table worker_settings enable row level security;
 alter table recurring_expenses enable row level security;
 alter table payroll enable row level security;
