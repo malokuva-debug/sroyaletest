@@ -4091,13 +4091,28 @@ function WorkerUnavailabilityCard({ workers, settings, setSettings, t, toast }) 
 /* =====================================================================
    RECURRING EXPENSES (fully automatic — configuration only)
 ===================================================================== */
-function RecurringExpensesCard({ items, onSave, onDelete, t, confirmAsync }) {
+function RecurringExpensesCard({ items, onSave, onDelete, onSync, t, confirmAsync }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formFreq, setFormFreq] = useState('monthly');
+  const [syncing, setSyncing] = useState(false);
 
   const freqLabel = (f) =>
     f === 'weekly' ? t('javore') : f === 'yearly' ? t('vjetore') : t('mujore');
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const res = await onSync();
+      toast.success(
+        t('sinkronizimi_u_perfundua')
+          .replace('{}', res?.recurringCreated ?? 0)
+          .replace('{}', res?.payrollCreated ?? 0)
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   const weekdayOptions = [
     { value: '1', label: t('e_hene') },
@@ -4127,9 +4142,15 @@ function RecurringExpensesCard({ items, onSave, onDelete, t, confirmAsync }) {
           <CardTitle className="text-base flex items-center gap-2">
             <RotateCcw className="w-4 h-4" /> {t('shpenzimet_periodike')}
           </CardTitle>
-          <Button size="sm" variant="outline" onClick={openNew}>
-            <Plus className="w-4 h-4 mr-1" /> {t('shto')}
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing}>
+              {syncing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1" />}
+              {t('sinkronizo')}
+            </Button>
+            <Button size="sm" variant="outline" onClick={openNew}>
+              <Plus className="w-4 h-4 mr-1" /> {t('shto')}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-1.5">
@@ -4361,6 +4382,10 @@ function CilesimetView({ user, setUser, workers, setWorkers, settings, setSettin
         }} onDelete={(id) => {
           setRecurringExpenses(prev => prev.filter(x => x.id !== id));
           return deleteRecurringExpense(id).catch(() => toast.error('Gabim në fshirje'));
+        }} onSync={async () => {
+          const res = await processDueTransactions();
+          onRefresh?.();
+          return res;
         }} t={t} confirmAsync={confirmAsync} />
       )}
 

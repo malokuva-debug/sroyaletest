@@ -518,6 +518,10 @@ export const translations = {
     dita_e_pageses_javore: "Dita e pagesës (javore)",
     data_fillimit_pagesave: "Data e fillimit të pagesave",
     next_payroll: "Paga tjetër",
+    paga: "Paga",
+    shpenzime_tjera: "Shpenzime të tjera",
+    sinkronizo: "Sinkronizo tani",
+    sinkronizimi_u_perfundua: "U shtuan {} shpenzime periodike, u gjeneruan {} lista page",
 
     // Payroll
     listapagat: "Listapagat",
@@ -1057,6 +1061,10 @@ export const translations = {
     dita_e_pageses_javore: "Pay day (weekly)",
     data_fillimit_pagesave: "Payroll start date",
     next_payroll: "Next payroll",
+    paga: "Salary",
+    shpenzime_tjera: "Other expenses",
+    sinkronizo: "Run now",
+    sinkronizimi_u_perfundua: "Added {} recurring expenses, generated {} payroll entries",
 
     // Payroll
     listapagat: "Payroll",
