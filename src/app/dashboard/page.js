@@ -175,6 +175,7 @@ function App() {
   const [appointments, setAppointments] = useState([]);
   const appointmentsRef = useRef([]);
   const userRef = useRef(null);
+  const autoGenRef = useRef(false);
   const [services, setServices] = useState([]);
   const [categories, setCategories] = useState([]);
   const [workerServices, setWorkerServicesState] = useState([]);
@@ -267,6 +268,18 @@ function App() {
       if (sessionUser) {
         setUser(sessionUser);
         await refreshData(sessionUser);
+        if (sessionUser.role === 'owner' && !autoGenRef.current) {
+          autoGenRef.current = true;
+          try {
+            const d = nowKS();
+            const period = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            await applyRecurringExpenses();
+            await generatePayroll(period);
+            await refreshData(sessionUser);
+          } catch (err) {
+            console.error('Auto-generate failed:', err?.message || err);
+          }
+        }
         setTimeout(() => requestNotifPermission(), 1500);
       } else {
         const existingOwner = await getAnyOwner();
