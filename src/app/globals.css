@@ -1,0 +1,286 @@
+@import "tailwindcss";
+
+/* Class-based dark mode (dashboard toggles `.dark` on <html>) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Brand (burgundy) scale */
+  --color-brand-50: #fbeaec;
+  --color-brand-100: #f3c8cd;
+  --color-brand-200: #471115;
+  --color-brand-300: #c95564;
+  --color-brand-400: #9c2d3b;
+  --color-brand-500: #7a1d28;
+  --color-brand-600: #5e1620;
+  --color-brand-700: #471115;
+  --color-brand-800: #350c0f;
+  --color-brand-900: #22070a;
+  --color-brand-950: #150405;
+
+  /* Gold scale */
+  --color-gold-50: #fdf9f1;
+  --color-gold-100: #faf1de;
+  --color-gold-200: #f3e2bd;
+  --color-gold-300: #e8d0a0;
+  --color-gold-400: #d8b574;
+  --color-gold-500: #c89a4f;
+  --color-gold-600: #a87b3e;
+  --color-gold-700: #7e5c30;
+  --color-gold-800: #553e22;
+  --color-gold-900: #322414;
+
+  /* ── Dashboard theme (from sroyale) ──────────────────────────────
+     The dashboard remaps rose, pink and amber to the brand palette so
+     its existing rose- and amber- prefixed utility classes render
+     burgundy and gold instead of Tailwind's default pink or orange. */
+  --color-rose-50: #fbeaec;
+  --color-rose-100: #f3c8cd;
+  --color-rose-200: #e08c97;
+  --color-rose-300: #c95564;
+  --color-rose-400: #9c2d3b;
+  --color-rose-500: #7a1d28;
+  --color-rose-600: #471115;
+  --color-rose-700: #350c0f;
+  --color-rose-800: #22070a;
+  --color-rose-900: #150405;
+  --color-rose-950: #0a0203;
+
+  --color-pink-50: #fbeaec;
+  --color-pink-100: #f3c8cd;
+  --color-pink-200: #e08c97;
+  --color-pink-300: #c95564;
+  --color-pink-400: #9c2d3b;
+  --color-pink-500: #7a1d28;
+  --color-pink-600: #5e1620;
+  --color-pink-700: #471115;
+  --color-pink-800: #350c0f;
+  --color-pink-900: #22070a;
+
+  --color-amber-50: #fdf9f1;
+  --color-amber-100: #faf1de;
+  --color-amber-200: #f3e2bd;
+  --color-amber-300: #e8d0a0;
+  --color-amber-400: #d8b574;
+  --color-amber-500: #c89a4f;
+  --color-amber-600: #a87b3e;
+  --color-amber-700: #7e5c30;
+  --color-amber-800: #553e22;
+  --color-amber-900: #322414;
+
+  /* shadcn/ui tokens used across the dashboard's components/ui/* primitives */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+/* Raw HSL triplets consumed by the --color-* tokens above.
+   These custom-property names aren't referenced anywhere in the landing
+   page's own CSS/classes, only by the dashboard's shadcn components, so
+   defining them globally is safe. */
+:root {
+  color-scheme: light;
+
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 222.2 84% 4.9%;
+  --chart-1: 12 76% 61%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 197 37% 24%;
+  --chart-4: 43 74% 66%;
+  --chart-5: 27 87% 67%;
+  --radius: 0.5rem;
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 240 5.3% 26.1%;
+  --sidebar-primary: 240 5.9% 10%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 240 4.8% 95.9%;
+  --sidebar-accent-foreground: 240 5.9% 10%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: 217.2 91.2% 59.8%;
+}
+.dark {
+  color-scheme: dark;
+
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 210 40% 98%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 212.7 26.8% 83.9%;
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+  --sidebar-background: 240 5.9% 10%;
+  --sidebar-foreground: 240 4.8% 95.9%;
+  --sidebar-primary: 224.3 76.3% 48%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 240 3.7% 15.9%;
+  --sidebar-accent-foreground: 240 4.8% 95.9%;
+  --sidebar-border: 240 3.7% 15.9%;
+  --sidebar-ring: 217.2 91.2% 59.8%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #471115;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #64191e;
+}
+
+/* Slim horizontal scroller used by the day picker */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #471115 transparent;
+  -webkit-overflow-scrolling: touch;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  height: 4px;
+}
+
+/* Lightweight enter animation (replaces tailwindcss-animate) */
+@keyframes sr-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-in {
+  animation: sr-enter 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Native date/time/month/number controls tinted to the brand.
+   color-scheme above already tells the browser whether to paint these
+   inputs' text and calendar icon light-on-dark or dark-on-light; this
+   just keeps the caret/checkbox/spinner accent burgundy in both modes. */
+input[type="date"],
+input[type="time"],
+input[type="month"],
+input[type="number"] {
+  accent-color: #7a1d28;
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-in,
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
