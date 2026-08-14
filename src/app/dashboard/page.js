@@ -1148,6 +1148,14 @@ function App() {
             onComplete={completeAppointment} onCancel={cancelAppointment} onReopen={reopenAppointment}
             goTo={(t, sv) => { setTab(t); if (sv) setSubview(sv); else setSubview(null); }}
             t={t} lang={lang} fmtDate={fmtDate} rangeFor={rangeFor} confirmAsync={confirmAsync}
+            services={services} categories={categories} clients={clients} workers={workers}
+            additionalServices={additionalServices}
+            onSaveAppointment={handleSaveAppointment}
+            onSaveIncome={handleSaveTeArdhur}
+            onSaveExpense={handleSaveShpenzim}
+            onSaveClient={handleSaveClient}
+            onSaveAdditionalService={handleSaveAdditionalService}
+            nowTime={nowTime}
           />
         )}
         {tab === 'tearrdhurat' && (
@@ -1305,13 +1313,11 @@ function QuickAction({ icon: Icon, label, onClick }) {
   );
 }
 
-function DashboardView({ user, teArdhurat, shpenzimet, appointments, produktet, settings, onComplete, onCancel, onReopen, goTo, t, lang, fmtDate, rangeFor, confirmAsync }) {
-  const [period, setPeriod] = useState('daily');
-  const [start, end] = rangeFor(period);
-  const income = teArdhurat.filter(t => inRange(t.date, start, end))
-    .reduce((s, t) => s + Number(t.price || 0), 0);
-  const expense = shpenzimet.filter(t => inRange(t.date, start, end))
-    .reduce((s, t) => s + Number(t.amount || 0), 0);
+function DashboardView({ user, teArdhurat, shpenzimet, appointments, produktet, settings, onComplete, onCancel, onReopen, goTo, t, lang, fmtDate, confirmAsync, services, categories, clients, workers, additionalServices, onSaveAppointment, onSaveIncome, onSaveExpense, onSaveClient, onSaveAdditionalService, nowTime }) {
+  const [quickModal, setQuickModal] = useState(null);
+
+  const income = teArdhurat.reduce((s, t) => s + Number(t.price || 0), 0);
+  const expense = shpenzimet.reduce((s, t) => s + Number(t.amount || 0), 0);
   const profit = income - expense;
 
   const today = todayISO();
@@ -1355,36 +1361,10 @@ function DashboardView({ user, teArdhurat, shpenzimet, appointments, produktet, 
         </div>
       </div>
 
-      <div>
-        <p className="text-sm font-semibold mb-2 px-1">{t('veprime_shpejta')}</p>
-        <div className="grid grid-cols-4 gap-2">
-          <QuickAction icon={CalendarPlus} label={t('shto_takim')} onClick={() => goTo('takimet')} />
-          {user?.role === 'owner' && (
-            <>
-              <QuickAction icon={TrendingUp} label={t('te_ardhurat_label')} onClick={() => goTo('tearrdhurat')} />
-              <QuickAction icon={Wallet} label={t('shpenzimet')} onClick={() => goTo('shpenzimet')} />
-              <QuickAction icon={Package} label={t('produktet')} onClick={() => goTo('me_shume', { id: 'produktet', label: t('produktet') })} />
-              <QuickAction icon={Users} label={t('klientet')} onClick={() => goTo('me_shume', { id: 'klientet', label: t('klientet') })} />
-              <QuickAction icon={BarChart3} label={t('analitika')} onClick={() => goTo('me_shume', { id: 'analitika', label: t('analitika') })} />
-            </>
-          )}
-        </div>
-      </div>
-
       {user?.role === 'owner' && (
       <Card className="border-rose-200 dark:border-rose-900/50 shadow-sm overflow-hidden">
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{t('fitimi')}</CardTitle>
-            <Tabs value={period} onValueChange={setPeriod}>
-              <TabsList className="h-8">
-                <TabsTrigger className="text-xs px-2" value="daily">{t('ditore')}</TabsTrigger>
-                <TabsTrigger className="text-xs px-2" value="weekly">{t('javor')}</TabsTrigger>
-                <TabsTrigger className="text-xs px-2" value="monthly">{t('mujor')}</TabsTrigger>
-                <TabsTrigger className="text-xs px-2" value="yearly">{t('vjetor')}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
+          <CardTitle className="text-sm font-medium text-muted-foreground">{t('fitimi')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className={cn(
@@ -1435,6 +1415,54 @@ function DashboardView({ user, teArdhurat, shpenzimet, appointments, produktet, 
           </ul>
         )}
       </div>
+
+      <div>
+        <p className="text-sm font-semibold mb-2 px-1">{t('veprime_shpejta')}</p>
+        <div className="grid grid-cols-3 gap-2">
+          <QuickAction icon={CalendarPlus} label={t('shto_takim')} onClick={() => setQuickModal('takim')} />
+          {user?.role === 'owner' && (
+            <>
+              <QuickAction icon={TrendingUp} label={t('shto_te_ardhura')} onClick={() => setQuickModal('teardhur')} />
+              <QuickAction icon={Wallet} label={t('shto_shpenzim')} onClick={() => setQuickModal('shpenzim')} />
+            </>
+          )}
+        </div>
+      </div>
+
+      <AppointmentFormDialog
+        open={quickModal === 'takim'}
+        onOpenChange={(v) => { if (!v) setQuickModal(null); }}
+        editing={null}
+        services={services} categories={categories} clients={clients} items={appointments} workers={workers}
+        currentUser={user} additionalServices={additionalServices}
+        onSaveClient={onSaveClient} onSaveAdditionalService={onSaveAdditionalService}
+        onSave={onSaveAppointment} t={t} nowTime={nowTime}
+      />
+
+      {user?.role === 'owner' && (
+        <>
+          <IncomeFormDialog
+            open={quickModal === 'teardhur'}
+            onOpenChange={(v) => { if (!v) setQuickModal(null); }}
+            editing={null}
+            services={services} clients={clients} additionalServices={additionalServices}
+            onSaveClient={onSaveClient} onSave={onSaveIncome} t={t}
+          />
+          <FormDialog t={t}
+            open={quickModal === 'shpenzim'}
+            onOpenChange={(v) => { if (!v) setQuickModal(null); }}
+            title={t('shto_shpenzim')}
+            initial={{ name: '', description: '', amount: '', date: todayISO() }}
+            fields={[
+              { name: 'name', label: t('emri'), type: 'text', required: true, placeholder: 'p.sh. Qira' },
+              { name: 'description', label: t('pershkrimi'), type: 'textarea', placeholder: 'Opsional' },
+              { name: 'amount', label: t('shuma'), type: 'number', required: true, step: '0.01' },
+              { name: 'date', label: t('data'), type: 'date', required: true },
+            ]}
+            onSave={(form) => { onSaveExpense(form); setQuickModal(null); }}
+          />
+        </>
+      )}
 
       {lowStock.length > 0 && (
         <Card className="border-amber-300 dark:border-amber-700/50">
@@ -1568,14 +1596,7 @@ function ShpenzimetView({ items, onSave, onDelete, t, fmtDate, confirmAsync }) {
   );
 }
 
-/* =====================================================================
-   TË ARDHURAT
-===================================================================== */
-function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClient, settings, t, fmtDate, rangeFor, confirmAsync, additionalServices }) {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [period, setPeriod] = useState('monthly');
-  const [refDate, setRefDate] = useState(() => nowKS());
+function IncomeFormDialog({ open, onOpenChange, editing, services, clients, additionalServices, onSaveClient, onSave, t }) {
   const [form, setForm] = useState({
     clientId: '', clientName: '', serviceId: '', serviceName: '',
     price: '', date: todayISO(), extras: [], notes: '',
@@ -1587,21 +1608,19 @@ function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClie
     try { return JSON.parse(v); } catch { return []; }
   }
 
-  function openNew() {
-    setEditing(null);
-    setForm({ clientId: '', clientName: '', serviceId: '', serviceName: '', price: '', date: todayISO(), extras: [], notes: '' });
-    setOpen(true);
-  }
-  function openEdit(it) {
-    setEditing(it);
-    setForm({
-      clientId: it.clientId || '', clientName: it.clientName || '',
-      serviceId: it.serviceId || '', serviceName: it.serviceName || '',
-      price: it.price ?? '', date: it.date || todayISO(),
-      extras: parseExtras(it.extras), notes: it.notes || '',
-    });
-    setOpen(true);
-  }
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      setForm({
+        clientId: editing.clientId || '', clientName: editing.clientName || '',
+        serviceId: editing.serviceId || '', serviceName: editing.serviceName || '',
+        price: editing.price ?? '', date: editing.date || todayISO(),
+        extras: parseExtras(editing.extras), notes: editing.notes || '',
+      });
+    } else {
+      setForm({ clientId: '', clientName: '', serviceId: '', serviceName: '', price: '', date: todayISO(), extras: [], notes: '' });
+    }
+  }, [open, editing]);
 
   const availExtras = (additionalServices || []).filter(x => x.active !== false);
 
@@ -1636,8 +1655,132 @@ function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClie
     }
     const payload = { ...form, clientId, price: Number(form.price) };
     onSave({ ...editing, ...payload });
-    setOpen(false);
+    onOpenChange(false);
   }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{editing ? t('modifiko_te_ardhurat') : t('shto_te_ardhura')}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">{t('sherbimi_required')}</Label>
+            {services.length > 0 ? (
+              <>
+                <Select value={form.serviceId} onValueChange={selectService}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder={t('zgjidh_sherbim')} /></SelectTrigger>
+                  <SelectContent>
+                    {services.map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name} — {fmtMoney(s.price)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  className="h-10 mt-2 text-sm" placeholder={t('orse_shkruaj_manualisht')}
+                  value={form.serviceName}
+                  onChange={(e) => setForm(f => ({ ...f, serviceName: e.target.value, serviceId: '' }))}
+                />
+              </>
+            ) : (
+              <Input
+                className="h-11" placeholder="Emri i shërbimit"
+                value={form.serviceName}
+                onChange={(e) => setForm(f => ({ ...f, serviceName: e.target.value }))}
+              />
+            )}
+          </div>
+          <div>
+            <Label className="text-xs">{t('klienti_opsional')}</Label>
+            <Input
+              list="clients-list" className="h-11" placeholder={t('emri_klientit')}
+              value={form.clientName}
+              onChange={(e) => {
+                const v = e.target.value;
+                const existing = clients.find(c => c.name === v);
+                setForm(f => ({ ...f, clientName: v, clientId: existing?.id || '' }));
+              }}
+            />
+            <datalist id="clients-list">
+              {clients.map(c => <option key={c.id} value={c.name} />)}
+            </datalist>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">{t('cmimi')} *</Label>
+              <Input
+                className="h-11" type="number" step="0.01" inputMode="decimal"
+                value={form.price}
+                onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">{t('data')} *</Label>
+              <Input className="h-11" type="date" value={form.date}
+                onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
+            </div>
+          </div>
+          {availExtras.length > 0 && (
+            <div>
+              <Label className="text-xs">{t('sherbime_shtese')}</Label>
+              <div className="space-y-1.5 mt-1.5 max-h-40 overflow-y-auto rounded-lg border p-2">
+                {availExtras.map(x => {
+                  const on = (form.extras || []).some(e => e.id === x.id);
+                  return (
+                    <button key={x.id} type="button" onClick={() => toggleExtra(x.id)}
+                      className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm border transition-all ${on ? 'border-rose-300 bg-rose-50 dark:bg-rose-950/30' : 'border-transparent hover:bg-muted'}`}>
+                      <span className="flex items-center gap-2">
+                        {on ? <CheckCircle2 className="w-4 h-4 text-rose-600" /> : <Circle className="w-4 h-4 text-muted-foreground" />}
+                        {x.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground tabular-nums">+{fmtMoney(x.price)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div>
+            <Label className="text-xs">{t('arsye_opsionale')}</Label>
+            <Textarea className="mt-1" rows={2} placeholder={t('arsye_opsionale')}
+              value={form.notes}
+              onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('anulo')}</Button>
+          <Button onClick={save} className="bg-rose-600 hover:bg-rose-700 text-white"><Save className="w-4 h-4 mr-2" /> {t('ruaj')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* =====================================================================
+   TË ARDHURAT
+==================================================================== */
+function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClient, settings, t, fmtDate, rangeFor, confirmAsync, additionalServices }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [period, setPeriod] = useState('monthly');
+  const [refDate, setRefDate] = useState(() => nowKS());
+
+  function parseExtras(v) {
+    if (v == null) return [];
+    if (Array.isArray(v)) return v;
+    try { return JSON.parse(v); } catch { return []; }
+  }
+
+  function openNew() {
+    setEditing(null);
+    setOpen(true);
+  }
+  function openEdit(it) {
+    setEditing(it);
+    setOpen(true);
+  }
+
   const [start, end, periodLabel] = rangeFor(period, refDate);
   const filtered = useMemo(
     () => items.filter(i => inRange(i.date, start, end))
@@ -1704,101 +1847,17 @@ function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClie
 
       <FAB t={t} onClick={openNew} />
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing ? t('modifiko_te_ardhurat') : t('shto_te_ardhura')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs">{t('sherbimi_required')}</Label>
-              {services.length > 0 ? (
-                <>
-                  <Select value={form.serviceId} onValueChange={selectService}>
-                    <SelectTrigger className="h-11"><SelectValue placeholder={t('zgjidh_sherbim')} /></SelectTrigger>
-                    <SelectContent>
-                      {services.map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.name} — {fmtMoney(s.price)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    className="h-10 mt-2 text-sm" placeholder={t('orse_shkruaj_manualisht')}
-                    value={form.serviceName}
-                    onChange={(e) => setForm(f => ({ ...f, serviceName: e.target.value, serviceId: '' }))}
-                  />
-                </>
-              ) : (
-                <Input
-                  className="h-11" placeholder="Emri i shërbimit"
-                  value={form.serviceName}
-                  onChange={(e) => setForm(f => ({ ...f, serviceName: e.target.value }))}
-                />
-              )}
-            </div>
-            <div>
-              <Label className="text-xs">{t('klienti_opsional')}</Label>
-              <Input
-                list="clients-list" className="h-11" placeholder={t('emri_klientit')}
-                value={form.clientName}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  const existing = clients.find(c => c.name === v);
-                  setForm(f => ({ ...f, clientName: v, clientId: existing?.id || '' }));
-                }}
-              />
-              <datalist id="clients-list">
-                {clients.map(c => <option key={c.id} value={c.name} />)}
-              </datalist>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">{t('cmimi')} *</Label>
-                <Input
-                  className="h-11" type="number" step="0.01" inputMode="decimal"
-                  value={form.price}
-                  onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">{t('data')} *</Label>
-                <Input className="h-11" type="date" value={form.date}
-                  onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
-              </div>
-            </div>
-            {availExtras.length > 0 && (
-              <div>
-                <Label className="text-xs">{t('sherbime_shtese')}</Label>
-                <div className="space-y-1.5 mt-1.5 max-h-40 overflow-y-auto rounded-lg border p-2">
-                  {availExtras.map(x => {
-                    const on = (form.extras || []).some(e => e.id === x.id);
-                    return (
-                      <button key={x.id} type="button" onClick={() => toggleExtra(x.id)}
-                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm border transition-all ${on ? 'border-rose-300 bg-rose-50 dark:bg-rose-950/30' : 'border-transparent hover:bg-muted'}`}>
-                        <span className="flex items-center gap-2">
-                          {on ? <CheckCircle2 className="w-4 h-4 text-rose-600" /> : <Circle className="w-4 h-4 text-muted-foreground" />}
-                          {x.name}
-                        </span>
-                        <span className="text-xs text-muted-foreground tabular-nums">+{fmtMoney(x.price)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            <div>
-              <Label className="text-xs">{t('arsye_opsionale')}</Label>
-              <Textarea className="mt-1" rows={2} placeholder={t('arsye_opsionale')}
-                value={form.notes}
-                onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>{t('anulo')}</Button>
-            <Button onClick={save} className="bg-rose-600 hover:bg-rose-700 text-white"><Save className="w-4 h-4 mr-2" /> {t('ruaj')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <IncomeFormDialog
+        open={open}
+        onOpenChange={(v) => { setOpen(v); if (!v) setEditing(null); }}
+        editing={editing}
+        services={services}
+        clients={clients}
+        additionalServices={additionalServices}
+        onSaveClient={onSaveClient}
+        onSave={onSave}
+        t={t}
+      />
     </div>
   );
 }
@@ -1806,12 +1865,7 @@ function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClie
 /* =====================================================================
    TAKIMET
 ===================================================================== */
-function TakimetView({ items, onSave, onDelete, services, categories = [], clients, onSaveClient, onComplete, onCancel, onReopen, workers, currentUser, t, lang, fmtDate, rangeFor, nowTime, confirmAsync, additionalServices = [], onSaveAdditionalService }) {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(todayISO());
-  const [period] = useState('monthly');
-  const [refDate, setRefDate] = useState(() => nowKS());
+function AppointmentFormDialog({ open, onOpenChange, editing, services = [], categories = [], clients = [], items = [], workers = [], currentUser, additionalServices = [], onSaveClient, onSaveAdditionalService, onSave, t, nowTime }) {
   const [form, setForm] = useState({
     clientName: '', phone: '', serviceId: '', serviceName: '', categoryId: '',
     date: todayISO(), time: nowTime(), extras: [],
@@ -1819,29 +1873,31 @@ function TakimetView({ items, onSave, onDelete, services, categories = [], clien
   });
   const [quickAddName, setQuickAddName] = useState('');
 
-  function openNew() {
-    setEditing(null);
-    const preWorker = currentUser?.role === 'worker'
-      ? { workerId: currentUser.id, workerName: currentUser.name || currentUser.username }
-      : { workerId: '', workerName: '' };
-    setForm({
-      clientName: '', phone: '', serviceId: '', serviceName: '', categoryId: '',
-      date: selectedDate, time: nowTime(), extras: [],
-      ...preWorker,
-    });
-    setOpen(true);
-  }
-  function openEdit(it) {
-    setEditing(it);
-    const svc = services.find(x => x.id === it.serviceId);
-    setForm({
-      clientId: it.clientId || "", clientName: it.clientName || '', phone: it.clientPhone || '', serviceId: it.serviceId || '',
-      serviceName: it.serviceName || '', categoryId: svc?.categoryId || '', date: it.date, time: it.time,
-      extras: Array.isArray(it.extras) ? it.extras : [],
-      workerId: it.workerId || '', workerName: it.workerName || '',
-    });
-    setOpen(true);
-  }
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      const svc = services.find(x => x.id === editing.serviceId);
+      setForm({
+        clientId: editing.clientId || "", clientName: editing.clientName || '', phone: editing.clientPhone || '',
+        serviceId: editing.serviceId || '', serviceName: editing.serviceName || '',
+        categoryId: svc?.categoryId || '', date: editing.date, time: editing.time,
+        extras: Array.isArray(editing.extras) ? editing.extras : [],
+        workerId: editing.workerId || '', workerName: editing.workerName || '',
+      });
+    } else {
+      const preWorker = currentUser?.role === 'worker'
+        ? { workerId: currentUser.id, workerName: currentUser.name || currentUser.username }
+        : { workerId: '', workerName: '' };
+      setForm({
+        clientName: '', phone: '', serviceId: '', serviceName: '', categoryId: '',
+        date: todayISO(), time: nowTime(), extras: [],
+        ...preWorker,
+      });
+    }
+    setQuickAddName('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing, currentUser?.id]);
+
   function selectService(id) {
     const s = services.find(x => x.id === id);
     setForm(f => ({ ...f, serviceId: id, serviceName: s?.name || '', categoryId: s?.categoryId || f.categoryId, extras: [] }));
@@ -1849,7 +1905,6 @@ function TakimetView({ items, onSave, onDelete, services, categories = [], clien
   function selectCategory(id) {
     setForm(f => ({ ...f, categoryId: id, serviceId: '', serviceName: '', extras: [] }));
   }
-
   function addExtra() {
     setForm(f => ({ ...f, extras: [...(f.extras || []), { id: uuid(), name: '', price: '' }] }));
   }
@@ -1919,30 +1974,214 @@ function TakimetView({ items, onSave, onDelete, services, categories = [], clien
       status: editing?.status || 'pending',
     };
     onSave(payload);
-    setOpen(false);
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-rose-600" />
+            {editing ? t('modifiko_takimin') : t('shto_takim')}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">{t('emri_label')}</Label>
+            <ClientCombobox t={t}
+              value={form.clientName}
+              onChange={(v) => { const existing = clients?.find(c => c.name.toLowerCase() === (v || "").toLowerCase().trim()); setForm(f => ({ ...f, clientName: v, phone: existing?.phone || f.phone })); }}
+              clients={clients}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">{t("telefoni") || "Telefoni"}</Label>
+            <Input className="h-11" placeholder="04X XXX XXX"
+              value={form.phone || ""}
+              onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-xs">{t('kategoria')}</Label>
+            {categories.length > 0 ? (
+              <Select value={form.categoryId || '__all__'} onValueChange={(v) => selectCategory(v === '__all__' ? '' : v)}>
+                <SelectTrigger className="h-11"><SelectValue placeholder={t('zgjidh')} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">{t('te_gjitha_ketu')}</SelectItem>
+                  {categories.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input className="h-11" disabled placeholder="—" value="" />
+            )}
+          </div>
+          <div>
+            <Label className="text-xs">{t('sherbimi_label')}</Label>
+            {services.length > 0 ? (
+              <>
+                <Select value={form.serviceId} onValueChange={selectService}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder={t('zgjidh_sherbim')} /></SelectTrigger>
+                  <SelectContent>
+                    {services.filter(s => !form.categoryId || s.categoryId === form.categoryId).map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input className="h-10 mt-2 text-sm" placeholder={t('orse_shkruaj_manualisht')}
+                  value={form.serviceName}
+                  onChange={(e) => setForm(f => ({ ...f, serviceName: e.target.value, serviceId: '' }))} />
+              </>
+            ) : (
+              <Input className="h-11" placeholder="p.sh. Manikyr"
+                value={form.serviceName}
+                onChange={(e) => setForm(f => ({ ...f, serviceName: e.target.value }))} />
+            )}
+          </div>
+          <div>
+            <Label className="text-xs">{t('data_label')}</Label>
+            <Input className="h-11 w-full" type="date" value={form.date}
+              onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
+          </div>
+
+          <div>
+            <Label className="text-xs">{t('ora_label')}</Label>
+            <Input className="h-11 w-full" type="time" value={form.time}
+              onChange={(e) => setForm(f => ({ ...f, time: e.target.value }))} />
+          </div>
+
+          {currentUser?.role === 'owner' && workers && workers.length > 0 && (
+            <div>
+              <Label className="text-xs">{t('punetori_opsional')}</Label>
+              <Select
+                value={form.workerId || '__none__'}
+                onValueChange={(v) => {
+                  if (v === '__none__') {
+                    setForm(f => ({ ...f, workerId: '', workerName: '' }));
+                  } else {
+                    const w = workers.find(x => x.id === v);
+                    setForm(f => ({ ...f, workerId: v, workerName: w?.name || w?.username || '' }));
+                  }
+                }}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder={t('pa_punetor')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{t('pa_punetor')}</SelectItem>
+                  {workers.filter(w => {
+                    const wn = (w.name || w.username || '').toLowerCase();
+                    return wn !== 'vanesa' && wn !== 'sparta';
+                  }).map(w => (
+                    <SelectItem key={w.id} value={w.id}>{w.name || w.username}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="border-t pt-3 mt-1">
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-xs">{t('sherbime_shtesë')}</Label>
+              <Button type="button" size="sm" variant="ghost" className="h-7 text-rose-600" onClick={addExtra}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> {t('shto')}
+              </Button>
+            </div>
+            {form.serviceId && additionalServices.filter(a => a.active !== false && a.serviceId === form.serviceId).length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {additionalServices.filter(a => a.active !== false && a.serviceId === form.serviceId).map(a => {
+                  const on = (form.extras || []).some(e => e.id === a.id);
+                  return (
+                    <button key={a.id} type="button"
+                      onClick={() => toggleAddon(a)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] transition-all ${
+                        on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
+                      }`}>
+                      <span className="truncate">{a.name}</span>
+                      <span className="tabular-nums opacity-70">{fmtMoney(a.price)}</span>
+                      {on && <Check className="w-3 h-3 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex gap-2 mb-2">
+              <Input
+                className="h-9 flex-1 text-sm"
+                placeholder={t('shto_sherbim_shtese_quick')}
+                value={quickAddName}
+                onChange={(e) => setQuickAddName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); quickAddAddon(quickAddName); setQuickAddName(''); } }}
+              />
+              <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={() => { quickAddAddon(quickAddName); setQuickAddName(''); }}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> {t('shto')}
+              </Button>
+            </div>
+            {(form.extras || []).length === 0 && (
+              <p className="text-xs text-muted-foreground">{t('asnje_sherbim_shtesë')}</p>
+            )}
+            <div className="space-y-2">
+              {(form.extras || []).map(ex => (
+                <div key={ex.id} className="flex gap-2">
+                  <Input
+                    className="h-10 flex-1 text-sm"
+                    placeholder={t('emri_extra')}
+                    value={ex.name}
+                    onChange={(e) => updateExtra(ex.id, { name: e.target.value })}
+                  />
+                  <Input
+                    className="h-10 w-20 text-sm"
+                    type="number" step="0.01" inputMode="decimal"
+                    placeholder="€"
+                    value={ex.price}
+                    onChange={(e) => updateExtra(ex.id, { price: e.target.value })}
+                  />
+                  <Button type="button" size="icon" variant="ghost" className="h-10 w-10 text-rose-600 shrink-0"
+                    onClick={() => removeExtra(ex.id)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            {(mainPrice > 0 || extrasTotal > 0) && (
+              <div className="mt-2 flex items-center justify-between bg-muted/60 rounded-md px-3 py-2 text-sm">
+                <span className="text-muted-foreground">
+                  {fmtMoney(mainPrice)}
+                  {extrasTotal > 0 && ` + ${fmtMoney(extrasTotal)}`}
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {t('total_label')} {fmtMoney(totalPrice)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('anulo')}</Button>
+          <Button onClick={save} className="bg-rose-600 hover:bg-rose-700 text-white"><Save className="w-4 h-4 mr-2" /> {t('ruaj')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TakimetView({ items, onSave, onDelete, services, categories = [], clients, onSaveClient, onComplete, onCancel, onReopen, workers, currentUser, t, lang, fmtDate, rangeFor, nowTime, confirmAsync, additionalServices = [], onSaveAdditionalService }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [period] = useState('monthly');
+  const [refDate, setRefDate] = useState(() => nowKS());
+
+  function openNew() {
+    setEditing(null);
+    setOpen(true);
+  }
+  function openEdit(it) {
+    setEditing(it);
+    setOpen(true);
   }
 
   const [startRange, endRange, periodLabel] = rangeFor(period, refDate);
-
-  const weekDays = useMemo(() => {
-    const d = new Date(selectedDate);
-    const day = (d.getDay() + 6) % 7;
-    const monday = new Date(d); monday.setDate(d.getDate() - day);
-    return Array.from({ length: 7 }).map((_, i) => {
-      const dd = new Date(monday); dd.setDate(monday.getDate() + i);
-      const y = dd.getFullYear();
-      const m = String(dd.getMonth()+1).padStart(2,'0');
-      const dv = String(dd.getDate()).padStart(2,'0');
-      return `${y}-${m}-${dv}`;
-    });
-  }, [selectedDate]);
-  const dayNames = [t('hë'), t('ma'), t('më'), t('en'), t('pr'), t('sh'), t('di')];
-
-  const apptsPerDay = useMemo(() => {
-    const m = {};
-    items.forEach(a => { m[a.date] = (m[a.date] || 0) + 1; });
-    return m;
-  }, [items]);
 
   const today = todayISO();
   const filteredItems = useMemo(() => {
@@ -1966,48 +2205,6 @@ function TakimetView({ items, onSave, onDelete, services, categories = [], clien
 
   return (
     <div className="space-y-3">
-      {false && (
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium">{fmtDate(selectedDate)}</p>
-              <Input type="date" value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="h-8 w-auto text-xs" />
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {weekDays.map((d, i) => {
-                const isSelected = d === selectedDate;
-                const isToday = d === todayISO();
-                const count = apptsPerDay[d] || 0;
-                const [,, dd] = d.split('-');
-                return (
-                  <button
-                    key={d}
-                    onClick={() => setSelectedDate(d)}
-                    className={cn(
-                      'flex flex-col items-center py-2 rounded-lg text-xs relative',
-                      isSelected ? 'bg-rose-600 text-white' :
-                        isToday ? 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300' :
-                        'hover:bg-muted'
-                    )}
-                  >
-                    <span className="text-[10px] opacity-70">{dayNames[i]}</span>
-                    <span className="font-semibold">{Number(dd)}</span>
-                    {count > 0 && (
-                      <span className={cn(
-                        'absolute bottom-1 w-1 h-1 rounded-full',
-                        isSelected ? 'bg-white' : 'bg-rose-600'
-                      )} />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" className="h-8 w-8 shrink-0"
             onClick={() => setRefDate(d => shiftPeriod(period, d, -1))}>
@@ -2046,191 +2243,23 @@ function TakimetView({ items, onSave, onDelete, services, categories = [], clien
 
       <FAB t={t} onClick={openNew} />
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-rose-600" />
-              {editing ? t('modifiko_takimin') : t('shto_takim')}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs">{t('emri_label')}</Label>
-              <ClientCombobox t={t}
-                value={form.clientName}
-                onChange={(v) => { const existing = clients?.find(c => c.name.toLowerCase() === (v || "").toLowerCase().trim()); setForm(f => ({ ...f, clientName: v, phone: existing?.phone || f.phone })); }}
-                clients={clients}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">{t("telefoni") || "Telefoni"}</Label>
-              <Input className="h-11" placeholder="04X XXX XXX"
-                value={form.phone || ""}
-                onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} />
-            </div>
-            <div>
-              <Label className="text-xs">{t('kategoria')}</Label>
-              {categories.length > 0 ? (
-                <Select value={form.categoryId || '__all__'} onValueChange={(v) => selectCategory(v === '__all__' ? '' : v)}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder={t('zgjidh')} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">{t('te_gjitha_ketu')}</SelectItem>
-                    {categories.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input className="h-11" disabled placeholder="—" value="" />
-              )}
-            </div>
-            <div>
-              <Label className="text-xs">{t('sherbimi_label')}</Label>
-              {services.length > 0 ? (
-                <>
-                  <Select value={form.serviceId} onValueChange={selectService}>
-                    <SelectTrigger className="h-11"><SelectValue placeholder={t('zgjidh_sherbim')} /></SelectTrigger>
-                    <SelectContent>
-                      {services.filter(s => !form.categoryId || s.categoryId === form.categoryId).map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input className="h-10 mt-2 text-sm" placeholder={t('orse_shkruaj_manualisht')}
-                    value={form.serviceName}
-                    onChange={(e) => setForm(f => ({ ...f, serviceName: e.target.value, serviceId: '' }))} />
-                </>
-              ) : (
-                <Input className="h-11" placeholder="p.sh. Manikyr"
-                  value={form.serviceName}
-                  onChange={(e) => setForm(f => ({ ...f, serviceName: e.target.value }))} />
-              )}
-            </div>
-            <div>
-              <Label className="text-xs">{t('data_label')}</Label>
-              <Input className="h-11 w-full" type="date" value={form.date}
-                onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
-            </div>
-
-            <div>
-              <Label className="text-xs">{t('ora_label')}</Label>
-              <Input className="h-11 w-full" type="time" value={form.time}
-                onChange={(e) => setForm(f => ({ ...f, time: e.target.value }))} />
-            </div>
-
-            {currentUser?.role === 'owner' && workers && workers.length > 0 && (
-              <div>
-                <Label className="text-xs">{t('punetori_opsional')}</Label>
-                <Select
-                  value={form.workerId || '__none__'}
-                  onValueChange={(v) => {
-                    if (v === '__none__') {
-                      setForm(f => ({ ...f, workerId: '', workerName: '' }));
-                    } else {
-                      const w = workers.find(x => x.id === v);
-                      setForm(f => ({ ...f, workerId: v, workerName: w?.name || w?.username || '' }));
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder={t('pa_punetor')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">{t('pa_punetor')}</SelectItem>
-                    {workers.filter(w => {
-                      const wn = (w.name || w.username || '').toLowerCase();
-                      return wn !== 'vanesa' && wn !== 'sparta';
-                    }).map(w => (
-                      <SelectItem key={w.id} value={w.id}>{w.name || w.username}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="border-t pt-3 mt-1">
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-xs">{t('sherbime_shtesë')}</Label>
-                <Button type="button" size="sm" variant="ghost" className="h-7 text-rose-600" onClick={addExtra}>
-                  <Plus className="w-3.5 h-3.5 mr-1" /> {t('shto')}
-                </Button>
-              </div>
-              {form.serviceId && additionalServices.filter(a => a.active !== false && a.serviceId === form.serviceId).length > 0 && (
-                <div className="mb-2 flex flex-wrap gap-1.5">
-                  {additionalServices.filter(a => a.active !== false && a.serviceId === form.serviceId).map(a => {
-                    const on = (form.extras || []).some(e => e.id === a.id);
-                    return (
-                      <button key={a.id} type="button"
-                        onClick={() => toggleAddon(a)}
-                        className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] transition-all ${
-                          on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-border text-muted-foreground'
-                        }`}>
-                        <span className="truncate">{a.name}</span>
-                        <span className="tabular-nums opacity-70">{fmtMoney(a.price)}</span>
-                        {on && <Check className="w-3 h-3 shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="flex gap-2 mb-2">
-                <Input
-                  className="h-9 flex-1 text-sm"
-                  placeholder={t('shto_sherbim_shtese_quick')}
-                  value={quickAddName}
-                  onChange={(e) => setQuickAddName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); quickAddAddon(quickAddName); setQuickAddName(''); } }}
-                />
-                <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={() => { quickAddAddon(quickAddName); setQuickAddName(''); }}>
-                  <Plus className="w-3.5 h-3.5 mr-1" /> {t('shto')}
-                </Button>
-              </div>
-              {(form.extras || []).length === 0 && (
-                <p className="text-xs text-muted-foreground">{t('asnje_sherbim_shtesë')}</p>
-              )}
-              <div className="space-y-2">
-                {(form.extras || []).map(ex => (
-                  <div key={ex.id} className="flex gap-2">
-                    <Input
-                      className="h-10 flex-1 text-sm"
-                      placeholder={t('emri_extra')}
-                      value={ex.name}
-                      onChange={(e) => updateExtra(ex.id, { name: e.target.value })}
-                    />
-                    <Input
-                      className="h-10 w-20 text-sm"
-                      type="number" step="0.01" inputMode="decimal"
-                      placeholder="€"
-                      value={ex.price}
-                      onChange={(e) => updateExtra(ex.id, { price: e.target.value })}
-                    />
-                    <Button type="button" size="icon" variant="ghost" className="h-10 w-10 text-rose-600 shrink-0"
-                      onClick={() => removeExtra(ex.id)}>
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              {(mainPrice > 0 || extrasTotal > 0) && (
-                <div className="mt-2 flex items-center justify-between bg-muted/60 rounded-md px-3 py-2 text-sm">
-                  <span className="text-muted-foreground">
-                    {fmtMoney(mainPrice)}
-                    {extrasTotal > 0 && ` + ${fmtMoney(extrasTotal)}`}
-                  </span>
-                  <span className="font-semibold tabular-nums">
-                    {t('total_label')} {fmtMoney(totalPrice)}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>{t('anulo')}</Button>
-            <Button onClick={save} className="bg-rose-600 hover:bg-rose-700 text-white"><Save className="w-4 h-4 mr-2" /> {t('ruaj')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AppointmentFormDialog
+        open={open}
+        onOpenChange={setOpen}
+        editing={editing}
+        services={services}
+        categories={categories}
+        clients={clients}
+        items={items}
+        workers={workers}
+        currentUser={currentUser}
+        additionalServices={additionalServices}
+        onSaveClient={onSaveClient}
+        onSaveAdditionalService={onSaveAdditionalService}
+        onSave={onSave}
+        t={t}
+        nowTime={nowTime}
+      />
     </div>
   );
 }
