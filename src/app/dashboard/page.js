@@ -44,8 +44,8 @@ const KEYS = { theme: "sparta_theme", user: "sparta_user", lang: "sparta_lang" }
 
 const SESSION_DAYS = 30;
 
-// ── Kosovo timezone helpers (Europe/Belgrade = UTC+1 winter, UTC+2 summer) ──
-const TZ = 'Europe/Belgrade';
+// ── Berlin timezone helpers (Europe/Berlin = UTC+1 winter, UTC+2 summer) ──
+const TZ = 'Europe/Berlin';
 
 function nowKS() {
   const now = new Date();
@@ -1934,6 +1934,7 @@ function AppointmentFormDialog({ open, onOpenChange, editing, services = [], cat
       || services.find(s => s.name?.toLowerCase() === (form.serviceName || '').toLowerCase());
     return svc ? Number(svc.price || 0) : 0;
   }, [form.serviceId, form.serviceName, services]);
+  const availAddons = additionalServices.filter(a => a.active !== false);
   const extrasTotal = (form.extras || []).reduce((s, e) => s + Number(e.price || 0), 0);
   const totalPrice = mainPrice + extrasTotal;
 
@@ -2104,6 +2105,37 @@ function AppointmentFormDialog({ open, onOpenChange, editing, services = [], cat
                     </button>
                   );
                 })}
+              </div>
+            )}
+            {availAddons.length > 0 && (
+              <div className="mb-2">
+                <Select
+                  value="__none__"
+                  onValueChange={(v) => {
+                    if (v === '__none__') return;
+                    const a = additionalServices.find(x => x.id === v);
+                    if (a) toggleAddon(a);
+                  }}
+                >
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue placeholder={t('zgjidh_sherbim_shtese')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">{t('zgjidh_sherbim_shtese')}</SelectItem>
+                    {availAddons.map(a => {
+                      const on = (form.extras || []).some(e => e.id === a.id);
+                      return (
+                        <SelectItem key={a.id} value={a.id}>
+                          <span className="flex items-center gap-1.5">
+                            {on && <Check className="w-3.5 h-3.5 text-rose-600" />}
+                            {a.name}
+                            <span className="tabular-nums opacity-70">— {fmtMoney(a.price)}</span>
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
             )}
             <div className="flex gap-2 mb-2">

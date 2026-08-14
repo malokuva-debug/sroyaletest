@@ -162,11 +162,11 @@ const C = {
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-// Kosovo is on CET/CEST (same rules as Europe/Belgrade). Format the current
-// instant in that zone so "today" is always the studio's local day.
+// Berlin is on CET/CEST. Format the current instant in that zone so "today"
+// is always the studio's local day.
 const kosovoIso = (offsetDays = 0) => {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Belgrade",
+    timeZone: "Europe/Berlin",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
