@@ -9,7 +9,7 @@ import {
   BarChart3, Settings as SettingsIcon, Moon, Sun, Download, Upload, FileText,
   AlertTriangle, Phone, Clock, ChevronLeft, Search, Save,
   Check, CheckCircle2, XCircle, RotateCcw, HelpCircle, Circle,
-  Loader2, GripVertical,
+  Loader2, GripVertical, CalendarPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1290,6 +1290,21 @@ function App() {
 /* =====================================================================
    DASHBOARD
 ===================================================================== */
+function QuickAction({ icon: Icon, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col items-center justify-center gap-1.5 rounded-xl border bg-card p-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-rose-300 dark:hover:border-rose-700 hover:bg-rose-50/60 dark:hover:bg-rose-950/30 active:scale-[0.97] transition-all"
+    >
+      <span className="flex items-center justify-center w-9 h-9 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300">
+        <Icon className="w-4 h-4" />
+      </span>
+      <span className="leading-tight text-center">{label}</span>
+    </button>
+  );
+}
+
 function DashboardView({ user, teArdhurat, shpenzimet, appointments, produktet, settings, onComplete, onCancel, onReopen, goTo, t, lang, fmtDate, rangeFor, confirmAsync }) {
   const [period, setPeriod] = useState('daily');
   const [start, end] = rangeFor(period);
@@ -1337,6 +1352,22 @@ function DashboardView({ user, teArdhurat, shpenzimet, appointments, produktet, 
           </div>
           <h2 className="text-xl font-bold leading-tight">{settings.salonName}</h2>
           <p className="text-xs opacity-90">{user.name || user.username}</p>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-sm font-semibold mb-2 px-1">{t('veprime_shpejta')}</p>
+        <div className="grid grid-cols-4 gap-2">
+          <QuickAction icon={CalendarPlus} label={t('shto_takim')} onClick={() => goTo('takimet')} />
+          {user?.role === 'owner' && (
+            <>
+              <QuickAction icon={TrendingUp} label={t('te_ardhurat_label')} onClick={() => goTo('tearrdhurat')} />
+              <QuickAction icon={Wallet} label={t('shpenzimet')} onClick={() => goTo('shpenzimet')} />
+              <QuickAction icon={Package} label={t('produktet')} onClick={() => goTo('me_shume', { id: 'produktet', label: t('produktet') })} />
+              <QuickAction icon={Users} label={t('klientet')} onClick={() => goTo('me_shume', { id: 'klientet', label: t('klientet') })} />
+              <QuickAction icon={BarChart3} label={t('analitika')} onClick={() => goTo('me_shume', { id: 'analitika', label: t('analitika') })} />
+            </>
+          )}
         </div>
       </div>
 

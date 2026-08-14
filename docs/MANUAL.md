@@ -485,6 +485,20 @@ Për përdorim më të avancuar, mund të konfiguroni cron për të dërguar njo
 - Endpoint: `/api/cron/reminders`
 - Kërkon `CRON_SECRET` në header-in e autorizimit
 - Kontrollon takimet dhe stokun e ulët
+- Gjeneron automatikisht **shpenzimet e përsëritura** dhe **pagat** kur janë të caktuara
+
+**Konfigurimi me cron-job.org (rekomandohet çdo minutë):**
+1. Krijo një job në https://cron-job.org me URL:
+   `https://<domain-i-juaj>/api/cron/reminders`
+2. Cakto intervalin **çdo minutë** (`*/1 * * * *`)
+3. Tek "Advanced → HTTP header" shto:
+   `Authorization: Bearer <CRON_SECRET>` (vlera e `CRON_SECRET` nga `.env`)
+4. Ruaj dhe aktivizo job-in
+
+> Kontrolli çdo minutë është i sigurt — shpenzimet e përsëritura dhe pagat
+> gjenerohen një herë vetëm (deduplikohen me `source_id` dhe indeksin unik
+> `payroll_worker_period_unique`), kështu që ekzekutimet e përsëritura nuk
+> krijojnë dublikata.
 
 ---
 

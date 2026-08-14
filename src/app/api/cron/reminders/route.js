@@ -215,17 +215,16 @@ export async function GET(req) {
       console.log(`[Cron Reminders] Skipping low stock check. lastCron: ${new Date(lastLowStockCron).toISOString()}, now: ${new Date(nowMs).toISOString()}`);
     }
 
-    // ── Recurring expenses + automatic payroll (once per day) ──────────────
+    // ── Recurring expenses + automatic payroll (every cron tick) ────────────
+    // Safe to run on every tick (cron-job.org every minute): recurring
+    // expenses are de-duplicated via shpenzimet.source_id
+    // (`recurring:<id>:<date>`) and payroll via the payroll_worker_period_unique
+    // window index + `payroll:<workerId>:<start>` source ids, so re-runs never
+    // create duplicates and each run only materialises rows that are due.
     try {
-      const lastRecurringCron = cfg.sparta_last_recurring_cron_at || 0;
-      if (nowMs - lastRecurringCron >= oneDayMs) {
-        const { processDueTransactions } = await import('@/lib/actions');
-        const result = await processDueTransactions();
-        debug.automation = result;
-        await supabase
-          .from('settings')
-          .upsert({ key: 'sparta_last_recurring_cron_at', value: JSON.stringify(nowMs) }, { onConflict: 'key' });
-      }
+      const { processDueTransactions } = await import('@/lib/actions');
+      const result = await processDueTransactions();
+      debug.automation = result;
     } catch (recurErr) {
       debug.automationError = String(recurErr?.message || recurErr);
     }

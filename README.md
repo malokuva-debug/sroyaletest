@@ -22,7 +22,8 @@ into it); that connection is now the dashboard's *only* database too.
 /api/appointments      landing page booking submission
 /api/availability      landing page availability lookup
 /api/salon, /api/health
-/api/cron/reminders    dashboard: appointment + low-stock push reminders (cron)
+/api/cron/reminders    dashboard: push reminders + low stock + recurring
+                       expenses + automatic payroll (cron — run every minute)
 /api/notifications     dashboard: polled by its service worker
 /api/push/subscribe    dashboard: web-push subscription management
 /api/push/test         dashboard: push diagnostics
@@ -98,3 +99,24 @@ distinct `<title>`/metadata per route.
   the logic in-process now instead of over HTTP if you want to simplify it.
 - `docs/` carries over the dashboard's original user manual (EN/SQ) for
   reference — not required for the app to run.
+
+## Scheduled automation (cron-job.org)
+
+Point a cron job at `/api/cron/reminders` so background tasks run on a
+schedule:
+
+1. Create a job at https://cron-job.org with URL
+   `https://<your-domain>/api/cron/reminders`.
+2. Set the interval to **every minute** (`*/1 * * * *`).
+3. Under "Advanced → HTTP header", add `Authorization: Bearer <CRON_SECRET>`
+   matching the `CRON_SECRET` env var (the route rejects requests without it).
+4. Save and enable the job.
+
+Each tick:
+- sends appointment + low-stock push reminders (deduped per day),
+- materialises any **recurring expenses** that are due,
+- generates any **automatic payroll** windows that are due.
+
+Recurring expenses and payroll are idempotent (`shpenzimet.source_id` +
+`payroll_worker_period_unique`), so running every minute only ever creates
+rows that are actually due — duplicate runs are no-ops.
