@@ -8,7 +8,7 @@ import {
   Plus, Trash2, Pencil, X, Package, Users, Scissors,
   BarChart3, Settings as SettingsIcon, Moon, Sun, Download, Upload, FileText,
   AlertTriangle, Phone, Clock, ChevronLeft, Search, Save,
-  Check, CheckCircle2, XCircle, RotateCcw, HelpCircle, Circle,
+  Check, CheckCircle2, XCircle, RotateCcw, HelpCircle,
   Loader2, GripVertical, CalendarPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -1164,7 +1164,6 @@ function App() {
             services={services} clients={clients} onSaveClient={handleSaveClient}
             settings={settings}
             t={t} fmtDate={fmtDate} rangeFor={rangeFor} confirmAsync={confirmAsync}
-            additionalServices={additionalServices}
           />
         )}
         {tab === 'shpenzimet' && (
@@ -1321,7 +1320,7 @@ function DashboardView({ user, teArdhurat, shpenzimet, appointments, produktet, 
   const profit = income - expense;
 
   const today = todayISO();
-  const [dashMonth, setDashMonth] = useState(() => today.slice(0, 7));
+  const dashMonth = today.slice(0, 7);
 
   const dashAppts = useMemo(() => {
     return appointments
@@ -1339,7 +1338,7 @@ function DashboardView({ user, teArdhurat, shpenzimet, appointments, produktet, 
         if (aIsFuture && bIsFuture) return aKey.localeCompare(bKey);
         return bKey.localeCompare(aKey);
       });
-  }, [appointments, dashMonth, today]);
+      }, [appointments, dashMonth, today]);
 
   const lowStock = produktet.filter(p => Number(p.quantity) <= Number(settings.lowStockThreshold || 5));
 
@@ -1390,20 +1389,12 @@ function DashboardView({ user, teArdhurat, shpenzimet, appointments, produktet, 
       <div>
         <div className="flex items-center justify-between mb-2 px-1">
           <p className="text-sm font-semibold">{t('takimet_e_sotme')}</p>
-          <div className="flex items-center gap-2">
-            <Input
-              type="month"
-              value={dashMonth}
-              onChange={(e) => setDashMonth(e.target.value)}
-              className="h-7 text-xs w-36 px-2"
-            />
-            <button
-              onClick={() => goTo('takimet')}
-              className="text-xs text-rose-400 font-medium whitespace-nowrap"
-            >
-              {t('shiko_te_gjitha')}
-            </button>
-          </div>
+          <button
+            onClick={() => goTo('takimet')}
+            className="text-xs text-rose-400 font-medium whitespace-nowrap"
+          >
+            {t('shiko_te_gjitha')}
+          </button>
         </div>
         {dashAppts.length === 0 ? (
           <p className="text-sm text-zinc-500 text-center py-6">{t('asnje_takim_sot')}</p>
@@ -1445,7 +1436,7 @@ function DashboardView({ user, teArdhurat, shpenzimet, appointments, produktet, 
             open={quickModal === 'teardhur'}
             onOpenChange={(v) => { if (!v) setQuickModal(null); }}
             editing={null}
-            services={services} clients={clients} additionalServices={additionalServices}
+            services={services} clients={clients}
             onSaveClient={onSaveClient} onSave={onSaveIncome} t={t}
           />
           <FormDialog t={t}
@@ -1596,17 +1587,11 @@ function ShpenzimetView({ items, onSave, onDelete, t, fmtDate, confirmAsync }) {
   );
 }
 
-function IncomeFormDialog({ open, onOpenChange, editing, services, clients, additionalServices, onSaveClient, onSave, t }) {
+function IncomeFormDialog({ open, onOpenChange, editing, services, clients, onSaveClient, onSave, t }) {
   const [form, setForm] = useState({
     clientId: '', clientName: '', serviceId: '', serviceName: '',
-    price: '', date: todayISO(), extras: [], notes: '',
+    price: '', date: todayISO(), notes: '',
   });
-
-  function parseExtras(v) {
-    if (v == null) return [];
-    if (Array.isArray(v)) return v;
-    try { return JSON.parse(v); } catch { return []; }
-  }
 
   useEffect(() => {
     if (!open) return;
@@ -1615,24 +1600,12 @@ function IncomeFormDialog({ open, onOpenChange, editing, services, clients, addi
         clientId: editing.clientId || '', clientName: editing.clientName || '',
         serviceId: editing.serviceId || '', serviceName: editing.serviceName || '',
         price: editing.price ?? '', date: editing.date || todayISO(),
-        extras: parseExtras(editing.extras), notes: editing.notes || '',
+        notes: editing.notes || '',
       });
     } else {
-      setForm({ clientId: '', clientName: '', serviceId: '', serviceName: '', price: '', date: todayISO(), extras: [], notes: '' });
+      setForm({ clientId: '', clientName: '', serviceId: '', serviceName: '', price: '', date: todayISO(), notes: '' });
     }
   }, [open, editing]);
-
-  const availExtras = (additionalServices || []).filter(x => x.active !== false);
-
-  function toggleExtra(id) {
-    setForm(f => {
-      const on = (f.extras || []).some(e => e.id === id);
-      const svc = availExtras.find(x => x.id === id);
-      if (on) return { ...f, extras: (f.extras || []).filter(e => e.id !== id) };
-      if (!svc) return f;
-      return { ...f, extras: [...(f.extras || []), { id: svc.id, name: svc.name, price: Number(svc.price) }] };
-    });
-  }
 
   function selectService(id) {
     const s = services.find(x => x.id === id);
@@ -1721,28 +1694,8 @@ function IncomeFormDialog({ open, onOpenChange, editing, services, clients, addi
                 onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
             </div>
           </div>
-          {availExtras.length > 0 && (
             <div>
-              <Label className="text-xs">{t('sherbime_shtese')}</Label>
-              <div className="space-y-1.5 mt-1.5 max-h-40 overflow-y-auto rounded-lg border p-2">
-                {availExtras.map(x => {
-                  const on = (form.extras || []).some(e => e.id === x.id);
-                  return (
-                    <button key={x.id} type="button" onClick={() => toggleExtra(x.id)}
-                      className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm border transition-all ${on ? 'border-rose-300 bg-rose-50 dark:bg-rose-950/30' : 'border-transparent hover:bg-muted'}`}>
-                      <span className="flex items-center gap-2">
-                        {on ? <CheckCircle2 className="w-4 h-4 text-rose-600" /> : <Circle className="w-4 h-4 text-muted-foreground" />}
-                        {x.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground tabular-nums">+{fmtMoney(x.price)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          <div>
-            <Label className="text-xs">{t('arsye_opsionale')}</Label>
+              <Label className="text-xs">{t('arsye_opsionale')}</Label>
             <Textarea className="mt-1" rows={2} placeholder={t('arsye_opsionale')}
               value={form.notes}
               onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))} />
@@ -1760,7 +1713,7 @@ function IncomeFormDialog({ open, onOpenChange, editing, services, clients, addi
 /* =====================================================================
    TË ARDHURAT
 ==================================================================== */
-function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClient, settings, t, fmtDate, rangeFor, confirmAsync, additionalServices }) {
+function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClient, settings, t, fmtDate, rangeFor, confirmAsync }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [period, setPeriod] = useState('monthly');
@@ -1853,7 +1806,6 @@ function TeArdhuratView({ items, onSave, onDelete, services, clients, onSaveClie
         editing={editing}
         services={services}
         clients={clients}
-        additionalServices={additionalServices}
         onSaveClient={onSaveClient}
         onSave={onSave}
         t={t}
